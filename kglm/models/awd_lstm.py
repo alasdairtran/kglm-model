@@ -2,14 +2,15 @@ import logging
 import math
 from typing import Any, Dict, List, Optional
 
-from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
+import torch
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
 from allennlp.models import Model
 from allennlp.nn import InitializerApplicator
-from allennlp.nn.util import get_text_field_mask, sequence_cross_entropy_with_logits
+from allennlp.nn.util import (get_text_field_mask,
+                              sequence_cross_entropy_with_logits)
 from overrides import overrides
-import torch
 
-from kglm.modules import embedded_dropout, LockedDropout, WeightDrop
+from kglm.modules import LockedDropout, WeightDrop, embedded_dropout
 from kglm.training.metrics import Ppl
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class AwdLstmLanguageModel(Model):
     initializer: ``InitializerApplicator``,  optional (default=``InitializerApplicator()``)
         Used to initialize the model parameters.
     """
+
     def __init__(self,
                  vocab: Vocabulary,
                  embedding_size: int,
@@ -92,11 +94,14 @@ class AwdLstmLanguageModel(Model):
                 output_size = embedding_size
             else:
                 output_size = hidden_size
-            rnns.append(torch.nn.LSTM(input_size, output_size, batch_first=True))
-        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop) for rnn in rnns]
+            rnns.append(torch.nn.LSTM(
+                input_size, output_size, batch_first=True))
+        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop)
+                for rnn in rnns]
         self.rnns = torch.nn.ModuleList(rnns)
 
-        self.decoder = torch.nn.Linear(output_size, vocab.get_vocab_size(namespace='tokens'))
+        self.decoder = torch.nn.Linear(
+            output_size, vocab.get_vocab_size(namespace='tokens'))
 
         # Optionally tie weights
         if tie_weights:
@@ -185,7 +190,8 @@ class AwdLstmLanguageModel(Model):
             loss = loss + self.alpha * current_input.pow(2).mean()
         # Temporal activation regularization (slowness)
         if self.beta:
-            loss = loss + self.beta * (output[:, 1:] - output[:, :-1]).pow(2).mean()
+            loss = loss + self.beta * \
+                (output[:, 1:] - output[:, :-1]).pow(2).mean()
 
         # Update metrics and state
         unks = target.eq(self._unk_index)

@@ -1,8 +1,8 @@
 import pickle
 
+import torch
 from allennlp.common.testing import AllenNlpTestCase
 from allennlp.data.vocabulary import Vocabulary
-import torch
 
 from kglm.modules import KnowledgeGraphLookup
 
@@ -32,7 +32,8 @@ class KnowledgeGraphLookupTest(AllenNlpTestCase):
         self.vocab.add_token_to_namespace('R2', 'relations')
 
         # Lastly we create the knowledge graph lookup
-        self.knowledge_graph_lookup = KnowledgeGraphLookup(self.path, self.vocab)
+        self.knowledge_graph_lookup = KnowledgeGraphLookup(
+            self.path, self.vocab)
 
     def test_lists_are_correct(self):
         # The lookup converts the data in the knowledge graph into lists of tensors.
@@ -42,9 +43,12 @@ class KnowledgeGraphLookupTest(AllenNlpTestCase):
 
         # We'll check that the information is correct for entity 'E1'. We'll start by building the
         # expected tensors from our inputs...
-        expected_relations, expected_tail_ids = zip(*self.temp_knowledge_graph['E1'])
-        expected_relations = [self.vocab.get_token_index(t, 'relations') for t in expected_relations]
-        expected_tail_ids = [self.vocab.get_token_index(t, 'raw_entity_ids') for t in expected_tail_ids]
+        expected_relations, expected_tail_ids = zip(
+            *self.temp_knowledge_graph['E1'])
+        expected_relations = [self.vocab.get_token_index(
+            t, 'relations') for t in expected_relations]
+        expected_tail_ids = [self.vocab.get_token_index(
+            t, 'raw_entity_ids') for t in expected_tail_ids]
         expected_relations = torch.LongTensor(expected_relations)
         expected_tail_ids = torch.LongTensor(expected_tail_ids)
         # ...then checking whether the corresponding elements in the lists are correct.
@@ -57,10 +61,12 @@ class KnowledgeGraphLookupTest(AllenNlpTestCase):
         parent_ids = [
             self.vocab.get_token_index('E1', 'entity_ids'),
             self.vocab.get_token_index('E2', 'entity_ids'),
-            self.vocab.get_token_index('E3', 'entity_ids')  # Should work, even though E3 not in the KG
+            # Should work, even though E3 not in the KG
+            self.vocab.get_token_index('E3', 'entity_ids')
         ]
         parent_ids = torch.LongTensor(parent_ids)
-        indices, _, relations, tail_ids = self.knowledge_graph_lookup(parent_ids)
+        indices, _, relations, tail_ids = self.knowledge_graph_lookup(
+            parent_ids)
 
         # Lookup indices of tokens expected to be in the output
         e2 = self.vocab.get_token_index('E2', 'raw_entity_ids')

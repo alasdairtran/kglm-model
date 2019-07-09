@@ -1,27 +1,30 @@
+import itertools
+import logging
+import random
 from collections import deque
 from copy import deepcopy
-import logging
-import itertools
-import random
 from typing import Deque, Dict, Iterable, Iterator, List, Tuple, Union
 
+import numpy as np
+import torch
 from allennlp.data.dataset import Batch
 from allennlp.data.fields import Field, ListField, MetadataField, TextField
 from allennlp.data.instance import Instance
-from allennlp.data.iterators.data_iterator import add_epoch_number, DataIterator
-import numpy as np
-import torch
+from allennlp.data.iterators.data_iterator import (DataIterator,
+                                                   add_epoch_number)
 
 from kglm.data.fields import SequentialArrayField
 
 logger = logging.getLogger(__name__)
 
-TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]  # pylint: disable=invalid-name
+TensorDict = Dict[str, Union[torch.Tensor,
+                             Dict[str, torch.Tensor]]]  # pylint: disable=invalid-name
 
 
 @DataIterator.register('fancy')
 class FancyIterator(DataIterator):
     """Fancy cause it's really expensive."""
+
     def __init__(self,
                  splitting_keys: List[str],
                  split_size: int,
@@ -32,12 +35,12 @@ class FancyIterator(DataIterator):
                  track_epoch: bool = False,
                  maximum_samples_per_batch: Tuple[str, int] = None) -> None:
         super(FancyIterator, self).__init__(
-                batch_size=batch_size,
-                instances_per_epoch=instances_per_epoch,
-                max_instances_in_memory=max_instances_in_memory,
-                cache_instances=cache_instances,
-                track_epoch=track_epoch,
-                maximum_samples_per_batch=maximum_samples_per_batch)
+            batch_size=batch_size,
+            instances_per_epoch=instances_per_epoch,
+            max_instances_in_memory=max_instances_in_memory,
+            cache_instances=cache_instances,
+            track_epoch=track_epoch,
+            maximum_samples_per_batch=maximum_samples_per_batch)
         self._splitting_keys = splitting_keys
         self._split_size = split_size
         self._eval = False
@@ -67,7 +70,8 @@ class FancyIterator(DataIterator):
 
             # We create queues for each instance in the batch, and greedily fill them to try and
             # ensure each queue's length is roughly equal in size.
-            queues: List[Deque[Instance]] = [deque() for _ in range(self._batch_size)]
+            queues: List[Deque[Instance]] = [deque()
+                                             for _ in range(self._batch_size)]
             queue_lengths = np.zeros(self._batch_size, dtype=int)
             for instance in instances:
 
@@ -112,7 +116,8 @@ class FancyIterator(DataIterator):
             split_indices.append(true_length)
 
         # Determine which fields are not going to be split
-        constant_fields = [x for x in instance.fields if x not in self._splitting_keys]
+        constant_fields = [
+            x for x in instance.fields if x not in self._splitting_keys]
 
         # Create the list of chunks
         chunks: List[Instance] = []

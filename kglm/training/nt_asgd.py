@@ -2,15 +2,15 @@
 Hacky implementation of the NT-ASGD optimization strategy from:
     TODO: Paste arXiv link.
 """
+import logging
 from copy import deepcopy
 from itertools import chain
-import logging
 from typing import Iterable, List
 
-from allennlp.common.checks import ConfigurationError
-from allennlp.training.optimizers import Optimizer
-from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 import torch
+from allennlp.common.checks import ConfigurationError
+from allennlp.training.learning_rate_schedulers import LearningRateScheduler
+from allennlp.training.optimizers import Optimizer
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,6 @@ class NTASGDOptimizer:
         return self.active_optimizer.state
 
 
-
 # Note: This technically does not change the learning rate, but I really don't
 # want to have to make changes to the Trainer to accept this as a general
 # Scheduler when its usage is exactly the same.
@@ -141,4 +140,3 @@ class NTASGDScheduler(LearningRateScheduler):
         if worse_off:
             self.optimizer.trigger()
         self.history.append(metric)
-

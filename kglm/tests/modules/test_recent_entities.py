@@ -1,6 +1,6 @@
+import torch
 from allennlp.common.testing import AllenNlpTestCase
 from allennlp.modules.token_embedders import Embedding
-import torch
 
 from kglm.modules.recent_entities import RecentEntities
 
@@ -42,7 +42,7 @@ class RecentEntitiesTest(AllenNlpTestCase):
         # We know that the candidate ids are given in the order in the last test,
         # here we check that the mask looks correct for entities in the first batch.
         # The mask for entities 1 and 2 in the first sequence should be the same
-        assert candidate_mask[0, :, 1].equal(candidate_mask[0,:,2])
+        assert candidate_mask[0, :, 1].equal(candidate_mask[0, :, 2])
         # The mask for entity 3 should be 1 for the 3rd timestep - it is not recent when it is first observed
         expected_3 = torch.tensor([0, 0, 1], dtype=torch.uint8)
         assert candidate_mask[0, :, 3].equal(expected_3)

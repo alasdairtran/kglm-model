@@ -1,40 +1,48 @@
-from typing import List, Iterator, Optional
 import argparse
-import sys
 import json
+import sys
+from typing import Iterator, List, Optional
 
 from allennlp.commands.subcommand import Subcommand
-from allennlp.common.checks import check_for_gpu, ConfigurationError
+from allennlp.common.checks import ConfigurationError, check_for_gpu
 from allennlp.common.util import lazy_groups_of
-from allennlp.models.archival import load_archive
-from allennlp.predictors.predictor import Predictor, JsonDict
 from allennlp.data import Instance
+from allennlp.models.archival import load_archive
+from allennlp.predictors.predictor import JsonDict, Predictor
 
 from kglm.predictors import ClozePredictor
+
 
 class Generate(Subcommand):
     def add_subparser(self, name: str, parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
         # pylint: disable=protected-access
         description = '''Run the specified model against a JSON-lines input file.'''
         subparser = parser.add_parser(
-                name, description=description, help='Use a trained model to make predictions.')
+            name, description=description, help='Use a trained model to make predictions.')
 
-        subparser.add_argument('model_archive_file', type=str, help='the archived model to make predictions with')
-        subparser.add_argument('sampler_archive_file', type=str, help='the archived model to make samples with')
-        subparser.add_argument('input_file', type=str, help='path to input file')
+        subparser.add_argument('model_archive_file', type=str,
+                               help='the archived model to make predictions with')
+        subparser.add_argument('sampler_archive_file', type=str,
+                               help='the archived model to make samples with')
+        subparser.add_argument('input_file', type=str,
+                               help='path to input file')
 
-        subparser.add_argument('--output-file', type=str, help='path to output file')
+        subparser.add_argument('--output-file', type=str,
+                               help='path to output file')
         subparser.add_argument('--weights-file',
                                type=str,
                                help='a path that overrides which weights file to use')
 
         batch_size = subparser.add_mutually_exclusive_group(required=False)
-        batch_size.add_argument('--batch-size', type=int, default=1, help='The batch size to use for processing')
+        batch_size.add_argument(
+            '--batch-size', type=int, default=1, help='The batch size to use for processing')
 
-        subparser.add_argument('--silent', action='store_true', help='do not print output to stdout')
+        subparser.add_argument(
+            '--silent', action='store_true', help='do not print output to stdout')
 
         cuda_device = subparser.add_mutually_exclusive_group(required=False)
-        cuda_device.add_argument('--cuda-device', type=int, default=-1, help='id of GPU to use (if any)')
+        cuda_device.add_argument(
+            '--cuda-device', type=int, default=-1, help='id of GPU to use (if any)')
 
         subparser.add_argument('--use-dataset-reader',
                                action='store_true',
@@ -52,6 +60,7 @@ class Generate(Subcommand):
         subparser.set_defaults(func=_predict)
 
         return subparser
+
 
 def _get_predictor(args: argparse.Namespace) -> Predictor:
     check_for_gpu(args.cuda_device)
@@ -86,7 +95,7 @@ class _PredictManager:
         self._batch_size = batch_size
         self._print_to_console = print_to_console
         if has_dataset_reader:
-            self._dataset_reader = predictor._dataset_reader # pylint: disable=protected-access
+            self._dataset_reader = predictor._dataset_reader  # pylint: disable=protected-access
         else:
             self._dataset_reader = None
 
@@ -129,9 +138,11 @@ class _PredictManager:
 
     def _get_instance_data(self) -> Iterator[Instance]:
         if self._input_file == "-":
-            raise ConfigurationError("stdin is not an option when using a DatasetReader.")
+            raise ConfigurationError(
+                "stdin is not an option when using a DatasetReader.")
         elif self._dataset_reader is None:
-            raise ConfigurationError("To generate instances directly, pass a DatasetReader.")
+            raise ConfigurationError(
+                "To generate instances directly, pass a DatasetReader.")
         else:
             yield from self._dataset_reader.read(self._input_file)
 
@@ -140,14 +151,17 @@ class _PredictManager:
         if has_reader:
             for batch in lazy_groups_of(self._get_instance_data(), self._batch_size):
                 for model_input_instance, result in zip(batch, self._predict_instances(batch)):
-                    self._maybe_print_to_console_and_file(result, str(model_input_instance))
+                    self._maybe_print_to_console_and_file(
+                        result, str(model_input_instance))
         else:
             for batch_json in lazy_groups_of(self._get_json_data(), self._batch_size):
                 for model_input_json, result in zip(batch_json, self._predict_json(batch_json)):
-                    self._maybe_print_to_console_and_file(result, json.dumps(model_input_json))
+                    self._maybe_print_to_console_and_file(
+                        result, json.dumps(model_input_json))
 
         if self._output_file is not None:
             self._output_file.close()
+
 
 def _predict(args: argparse.Namespace) -> None:
     predictor = _get_predictor(args)
@@ -164,4 +178,3 @@ def _predict(args: argparse.Namespace) -> None:
                               not args.silent,
                               args.use_dataset_reader)
     manager.run()
-

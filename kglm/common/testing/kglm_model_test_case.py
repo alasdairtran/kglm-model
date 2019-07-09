@@ -1,15 +1,14 @@
 import copy
-from typing import Any, Dict, Set, Union, Iterable
+from typing import Any, Dict, Iterable, Set, Union
 
-from numpy.testing import assert_allclose
 import torch
-
 from allennlp.commands.train import train_model_from_file
 from allennlp.common import Params
 from allennlp.common.testing import ModelTestCase
 from allennlp.data import DataIterator, DatasetReader, Vocabulary
 from allennlp.data.dataset import Batch
 from allennlp.models import Model, load_archive
+from numpy.testing import assert_allclose
 
 
 class KglmModelTestCase(ModelTestCase):
@@ -17,6 +16,7 @@ class KglmModelTestCase(ModelTestCase):
     A subclass of :class:`~allennlp.common.testing.test_case.AllenNlpTestCase`
     that relaxes some assumptions with regard to the iterator.
     """
+
     def ensure_model_can_train_save_and_load(self,
                                              param_file: str,
                                              tolerance: float = 1e-4,
@@ -47,8 +47,10 @@ class KglmModelTestCase(ModelTestCase):
         """
         save_dir = self.TEST_DIR / "save_and_load_test"
         archive_file = save_dir / "model.tar.gz"
-        model = train_model_from_file(param_file, save_dir, overrides=overrides)
-        loaded_model = load_archive(archive_file, cuda_device=cuda_device).model
+        model = train_model_from_file(
+            param_file, save_dir, overrides=overrides)
+        loaded_model = load_archive(
+            archive_file, cuda_device=cuda_device).model
         state_keys = model.state_dict().keys()
         loaded_state_keys = loaded_model.state_dict().keys()
         assert state_keys == loaded_state_keys
@@ -83,12 +85,14 @@ class KglmModelTestCase(ModelTestCase):
 
         # Check gradients are None for non-trainable parameters and check that
         # trainable parameters receive some gradient if they are trainable.
-        self.check_model_computes_gradients_correctly(model, model_batch, gradients_to_ignore)
+        self.check_model_computes_gradients_correctly(
+            model, model_batch, gradients_to_ignore)
 
         # The datasets themselves should be identical.
         assert model_batch.keys() == loaded_batch.keys()
         for key in model_batch.keys():
-            self.assert_fields_equal(model_batch[key], loaded_batch[key], key, 1e-6)
+            self.assert_fields_equal(
+                model_batch[key], loaded_batch[key], key, 1e-6)
 
         # Set eval mode, to turn off things like dropout, then get predictions.
         model.eval()

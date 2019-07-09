@@ -1,6 +1,6 @@
-from allennlp.common.util import ensure_list
 import numpy as np
 import pytest
+from allennlp.common.util import ensure_list
 
 from kglm.data.dataset_readers import Conll2012DatasetReader
 
@@ -17,14 +17,14 @@ class TestConll2012DatasetReader:
 
         first_instance_tokens = [x.text for x in instances[0]["tokens"].tokens]
         assert first_instance_tokens == [
-                '@@START@@', 'In', 'the', 'summer', 'of', '@@NUM@@', ',', 'a', 'picture', 'that',
-                'people', 'have', 'long', 'been', 'looking', 'forward', 'to',
-                'started', 'emerging', 'with', 'frequency', 'in', 'various', 'major',
-                'Hong', 'Kong', 'media', '.', 'With', 'their', 'unique', 'charm', ',',
-                'these', 'well', '-', 'known', 'cartoon', 'images', 'once', 'again',
-                'caused', 'Hong', 'Kong', 'to', 'be', 'a', 'focus', 'of', 'worldwide',
-                'attention', '.', 'The', 'world', "'s", 'fifth', 'Disney', 'park',
-                'will', 'soon', 'open', 'to', 'the', 'public', 'here', '.', '@@END@@'
+            '@@START@@', 'In', 'the', 'summer', 'of', '@@NUM@@', ',', 'a', 'picture', 'that',
+            'people', 'have', 'long', 'been', 'looking', 'forward', 'to',
+            'started', 'emerging', 'with', 'frequency', 'in', 'various', 'major',
+            'Hong', 'Kong', 'media', '.', 'With', 'their', 'unique', 'charm', ',',
+            'these', 'well', '-', 'known', 'cartoon', 'images', 'once', 'again',
+            'caused', 'Hong', 'Kong', 'to', 'be', 'a', 'focus', 'of', 'worldwide',
+            'attention', '.', 'The', 'world', "'s", 'fifth', 'Disney', 'park',
+            'will', 'soon', 'open', 'to', 'the', 'public', 'here', '.', '@@END@@'
         ]
         # {(41, 42): 1, (23, 24): 1, (28, 28): 2, (32, 37): 2}
         first_instance_entity_types = instances[0]["entity_types"].array

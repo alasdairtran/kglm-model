@@ -4,15 +4,15 @@ instead of eliminating tokens that would be mapped to <UNK>, we keep them and mo
 functions to return <UNK>.
 """
 import logging
-from typing import Any, Dict, Iterable, List, Optional, Set, Union
 from collections import defaultdict
+from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 from allennlp.common import Params
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.tqdm import Tqdm
 from allennlp.data import instance as adi  # pylint: disable=unused-import
-from allennlp.data.vocabulary import _read_pretrained_tokens, namespace_match, pop_max_vocab_size
-from allennlp.data.vocabulary import Vocabulary
+from allennlp.data.vocabulary import (Vocabulary, _read_pretrained_tokens,
+                                      namespace_match, pop_max_vocab_size)
 from overrides import overrides
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class ExtendedVocabulary(Vocabulary):
     for each namespace, we create an additional "*unk" namespace which stores tokens that
     get mapped to <UNK>.
     """
+
     def __init__(self,
                  counter: Dict[set, Dict[str, int]] = None,
                  min_count: Dict[str, int] = None,
@@ -61,7 +62,8 @@ class ExtendedVocabulary(Vocabulary):
         """
         if not isinstance(max_vocab_size, dict):
             int_max_vocab_size = max_vocab_size
-            max_vocab_size = defaultdict(lambda: int_max_vocab_size)  # type: ignore
+            max_vocab_size = defaultdict(
+                lambda: int_max_vocab_size)  # type: ignore
         min_count = min_count or {}
         pretrained_files = pretrained_files or {}
         min_pretrained_embeddings = min_pretrained_embeddings or {}
@@ -82,8 +84,8 @@ class ExtendedVocabulary(Vocabulary):
             extension_padded = not any(namespace_match(pattern, namespace)
                                        for pattern in non_padded_namespaces)
             if original_padded != extension_padded:
-                raise ConfigurationError("Common namespace {} has conflicting ".format(namespace)+
-                                         "setting of padded = True/False. "+
+                raise ConfigurationError("Common namespace {} has conflicting ".format(namespace) +
+                                         "setting of padded = True/False. " +
                                          "Hence extension cannot be done.")
 
         # Add new non-padded namespaces for extension
@@ -93,7 +95,8 @@ class ExtendedVocabulary(Vocabulary):
 
         for namespace in counter:  # pylint: disable=too-many-nested-blocks
             if namespace in pretrained_files:
-                pretrained_list = _read_pretrained_tokens(pretrained_files[namespace])
+                pretrained_list = _read_pretrained_tokens(
+                    pretrained_files[namespace])
                 min_embeddings = min_pretrained_embeddings.get(namespace, 0)
                 if min_embeddings > 0:
                     tokens_old = tokens_to_add.get(namespace, [])
@@ -107,7 +110,8 @@ class ExtendedVocabulary(Vocabulary):
             try:
                 max_vocab = max_vocab_size[namespace]
                 if max_vocab is not None:
-                    unk_counts = token_counts[max_vocab:]  # Add these to *unk namespace
+                    # Add these to *unk namespace
+                    unk_counts = token_counts[max_vocab:]
                     token_counts = token_counts[:max_vocab]
                 else:
                     unk_counts = []
@@ -120,7 +124,8 @@ class ExtendedVocabulary(Vocabulary):
                             if count >= min_count.get(namespace, 1):
                                 self.add_token_to_namespace(token, namespace)
                             else:
-                                self.add_token_to_namespace(token, namespace + '_unk')
+                                self.add_token_to_namespace(
+                                    token, namespace + '_unk')
                     elif token in pretrained_set or count >= min_count.get(namespace, 1):
                         self.add_token_to_namespace(token, namespace)
                     else:
@@ -154,7 +159,8 @@ class ExtendedVocabulary(Vocabulary):
         of what the other parameters do.
         """
         logger.info("Fitting token dictionary from dataset.")
-        namespace_token_counts: Dict[Set[Any], Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        namespace_token_counts: Dict[Set[Any], Dict[str, int]] = defaultdict(
+            lambda: defaultdict(int))
         for instance in Tqdm.tqdm(instances):
             instance.count_vocab_items(namespace_token_counts)
 
@@ -169,7 +175,8 @@ class ExtendedVocabulary(Vocabulary):
 
     # There's enough logic here to require a custom from_params.
     @classmethod
-    def from_params(cls, params: Params, instances: Iterable['adi.Instance'] = None):  # type: ignore
+    # type: ignore
+    def from_params(cls, params: Params, instances: Iterable['adi.Instance'] = None):
         """
         There are two possible ways to build a vocabulary; from a
         collection of instances, using :func:`Vocabulary.from_instances`, or
@@ -209,13 +216,16 @@ class ExtendedVocabulary(Vocabulary):
             raise ConfigurationError("You must provide either a Params object containing a "
                                      "vocab_directory key or a Dataset to build a vocabulary from.")
         if extend and not instances:
-            raise ConfigurationError("'extend' is true but there are not instances passed to extend.")
+            raise ConfigurationError(
+                "'extend' is true but there are not instances passed to extend.")
         if extend and not vocabulary_directory:
-            raise ConfigurationError("'extend' is true but there is not 'directory_path' to extend from.")
+            raise ConfigurationError(
+                "'extend' is true but there is not 'directory_path' to extend from.")
 
         if vocabulary_directory and instances:
             if extend:
-                logger.info("Loading Vocab from files and extending it with dataset.")
+                logger.info(
+                    "Loading Vocab from files and extending it with dataset.")
             else:
                 logger.info("Loading Vocab from files instead of dataset.")
 
@@ -229,10 +239,13 @@ class ExtendedVocabulary(Vocabulary):
             return vocab
         min_count = params.pop("min_count", None)
         max_vocab_size = pop_max_vocab_size(params)
-        non_padded_namespaces = params.pop("non_padded_namespaces", EXTENDED_NON_PADDED_NAMESPACES)
+        non_padded_namespaces = params.pop(
+            "non_padded_namespaces", EXTENDED_NON_PADDED_NAMESPACES)
         pretrained_files = params.pop("pretrained_files", {})
-        min_pretrained_embeddings = params.pop("min_pretrained_embeddings", None)
-        only_include_pretrained_words = params.pop_bool("only_include_pretrained_words", False)
+        min_pretrained_embeddings = params.pop(
+            "min_pretrained_embeddings", None)
+        only_include_pretrained_words = params.pop_bool(
+            "only_include_pretrained_words", False)
         tokens_to_add = params.pop("tokens_to_add", None)
         params.assert_empty("Vocabulary - from dataset")
         return ExtendedVocabulary.from_instances(instances=instances,

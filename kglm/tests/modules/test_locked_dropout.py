@@ -1,5 +1,5 @@
-from allennlp.common.testing import AllenNlpTestCase
 import torch
+from allennlp.common.testing import AllenNlpTestCase
 
 from kglm.modules.locked_dropout import LockedDropout
 

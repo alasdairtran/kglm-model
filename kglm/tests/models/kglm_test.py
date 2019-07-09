@@ -1,11 +1,12 @@
 # pylint: disable=protected-access,not-callable,unused-import
-from allennlp.common import Params
-from allennlp.data import DataIterator, DatasetReader
 import numpy as np
 import torch
+from allennlp.common import Params
+from allennlp.data import DataIterator, DatasetReader
 
 from kglm.common.testing import KglmModelTestCase
-from kglm.data.dataset_readers.enhanced_wikitext import EnhancedWikitextKglmReader
+from kglm.data.dataset_readers.enhanced_wikitext import \
+    EnhancedWikitextKglmReader
 from kglm.models.kglm import Kglm
 from kglm.models.kglm_disc import KglmDisc
 
@@ -20,6 +21,7 @@ class KglmTest(KglmModelTestCase):
     def test_model_can_train_save_and_load(self):
         self.ensure_model_can_train_save_and_load(self.param_file)
 
+
 class KglmNoShortlistTest(KglmModelTestCase):
 
     def setUp(self):
@@ -30,6 +32,7 @@ class KglmNoShortlistTest(KglmModelTestCase):
     def test_model_can_train_save_and_load(self):
         self.ensure_model_can_train_save_and_load(self.param_file)
 
+
 class KglmDiscTest(KglmModelTestCase):
 
     def setUp(self):
@@ -38,10 +41,12 @@ class KglmDiscTest(KglmModelTestCase):
                           "kglm/tests/fixtures/enhanced-wikitext-test/train.jsonl")
 
     def test_model_can_train_save_and_load(self):
-        self.ensure_model_can_train_save_and_load(self.param_file, gradients_to_ignore=['_overlap_weight'])
+        self.ensure_model_can_train_save_and_load(
+            self.param_file, gradients_to_ignore=['_overlap_weight'])
 
     def test_sample(self):
-        generator_params = Params.from_file("kglm/tests/fixtures/training_config/kglm.json")
+        generator_params = Params.from_file(
+            "kglm/tests/fixtures/training_config/kglm.json")
         params = Params.from_file(self.param_file)
         dataset_file = "kglm/tests/fixtures/enhanced-wikitext-test/train.jsonl"
 
@@ -66,7 +71,8 @@ class KglmDiscNoShortlistTest(KglmModelTestCase):
         self.ensure_model_can_train_save_and_load(self.param_file)
 
     def test_sample(self):
-        generator_params = Params.from_file("kglm/tests/fixtures/training_config/kglm.no-shortlist.json")
+        generator_params = Params.from_file(
+            "kglm/tests/fixtures/training_config/kglm.no-shortlist.json")
         params = Params.from_file(self.param_file)
         dataset_file = "kglm/tests/fixtures/enhanced-wikitext-test/train.jsonl"
 
@@ -85,4 +91,3 @@ class KglmDiscNoShortlistTest(KglmModelTestCase):
         logp1 = self.model.sample(**batch).get('logp', None)
         torch.manual_seed(123)
         logp2 = self.model.sample(**batch).get('logp', None)
-

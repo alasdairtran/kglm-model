@@ -4,14 +4,14 @@ Readers for the CoNLL 2012 dataset.
 import collections
 from typing import DefaultDict, Dict, Iterable, List, Optional, Set, Tuple
 
+import numpy as np
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.dataset_readers.dataset_utils import Ontonotes
 from allennlp.data.fields import Field, TextField
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
+from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.tokenizers import Token
-import numpy as np
 from overrides import overrides
 
 from kglm.data.fields import SequentialArrayField
@@ -70,13 +70,15 @@ class Conll2012DatasetReader(DatasetReader):
         This is used to index the words in the document.  See :class:`TokenIndexer`.
         Default is ``{"tokens": SingleIdTokenIndexer()}``.
     """
+
     def __init__(self,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  replace_numbers: bool = True,
                  lazy: bool = False) -> None:
         super().__init__(lazy)
         self._replace_numbers = replace_numbers
-        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._token_indexers = token_indexers or {
+            "tokens": SingleIdTokenIndexer()}
 
     @overrides
     def _read(self, file_path: str):
@@ -85,7 +87,8 @@ class Conll2012DatasetReader(DatasetReader):
 
         ontonotes_reader = Ontonotes()
         for sentences in ontonotes_reader.dataset_document_iterator(file_path):
-            clusters: DefaultDict[int, List[Tuple[int, int]]] = collections.defaultdict(list)
+            clusters: DefaultDict[int, List[Tuple[int, int]]
+                                  ] = collections.defaultdict(list)
 
             total_tokens = 0
             for sentence in sentences:
@@ -137,7 +140,8 @@ class Conll2012DatasetReader(DatasetReader):
         # Filter gold_clusters: for embedded mentions, only the
         # enclosing (outer) entity mention is kept.
         filtered_gold_clusters = []
-        all_entity_spans = [span for gold_cluster in gold_clusters for span in gold_cluster]
+        all_entity_spans = [
+            span for gold_cluster in gold_clusters for span in gold_cluster]
         for cluster in gold_clusters:
             filtered_cluster = []
             for span in cluster:
@@ -156,7 +160,8 @@ class Conll2012DatasetReader(DatasetReader):
                 filtered_gold_clusters.append(filtered_cluster)
 
         # Sort the gold clusters, so the earlier-occurring clusters are earlier in the list
-        filtered_gold_clusters = sorted(filtered_gold_clusters, key=lambda x: sorted(x)[0][0])
+        filtered_gold_clusters = sorted(
+            filtered_gold_clusters, key=lambda x: sorted(x)[0][0])
 
         flattened_sentences = [self._normalize_word(word, self._replace_numbers)
                                for sentence in sentences
@@ -186,11 +191,14 @@ class Conll2012DatasetReader(DatasetReader):
                 entity_ids[cluster[0] + 1:cluster[1] + 1 + 1] = entity_id
                 entity_length = (cluster[1] + 1) - cluster[0]
                 # Fill in mention length
-                mention_lengths[cluster[0] + 1:cluster[1] + 1 + 1] = np.arange(entity_length, 0, step=-1)
+                mention_lengths[cluster[0] + 1:cluster[1] +
+                                1 + 1] = np.arange(entity_length, 0, step=-1)
 
         fields['entity_ids'] = SequentialArrayField(entity_ids, dtype=np.int64)
-        fields['mention_lengths'] = SequentialArrayField(mention_lengths, dtype=np.int64)
-        fields['entity_types'] = SequentialArrayField(entity_types, dtype=np.uint8)
+        fields['mention_lengths'] = SequentialArrayField(
+            mention_lengths, dtype=np.int64)
+        fields['entity_types'] = SequentialArrayField(
+            entity_types, dtype=np.uint8)
         return Instance(fields)
 
     @staticmethod

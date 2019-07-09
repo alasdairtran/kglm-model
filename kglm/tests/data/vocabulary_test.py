@@ -25,7 +25,8 @@ class TestVocabulary(AllenNlpTestCase):
 
     def test_from_dataset_respects_max_vocab_size_single_int(self):
         max_vocab_size = 1
-        vocab = ExtendedVocabulary.from_instances(self.dataset, max_vocab_size=max_vocab_size)
+        vocab = ExtendedVocabulary.from_instances(
+            self.dataset, max_vocab_size=max_vocab_size)
         words = vocab.get_index_to_token_vocabulary().values()
         # Additional 2 tokens are '@@PADDING@@' and '@@UNKNOWN@@' by default
         assert len(words) == max_vocab_size + 2
@@ -35,7 +36,8 @@ class TestVocabulary(AllenNlpTestCase):
         assert len(words) == 5
 
     def test_from_dataset_respects_min_count(self):
-        vocab = ExtendedVocabulary.from_instances(self.dataset, min_count={'tokens': 4})
+        vocab = ExtendedVocabulary.from_instances(
+            self.dataset, min_count={'tokens': 4})
         words = vocab.get_index_to_token_vocabulary().values()
         assert 'a' in words
         assert 'b' not in words
@@ -52,10 +54,12 @@ class TestVocabulary(AllenNlpTestCase):
         vocab_dir = self.TEST_DIR / 'vocab_save'
 
         vocab = ExtendedVocabulary(non_padded_namespaces=["a", "c"])
-        vocab.add_token_to_namespace("a0", namespace="a")  # non-padded, should start at 0
+        # non-padded, should start at 0
+        vocab.add_token_to_namespace("a0", namespace="a")
         vocab.add_token_to_namespace("a1", namespace="a")
         vocab.add_token_to_namespace("a2", namespace="a")
-        vocab.add_token_to_namespace("b2", namespace="b")  # padded, should start at 2
+        # padded, should start at 2
+        vocab.add_token_to_namespace("b2", namespace="b")
         vocab.add_token_to_namespace("b3", namespace="b")
 
         vocab.save_to_files(vocab_dir)
@@ -73,9 +77,12 @@ class TestVocabulary(AllenNlpTestCase):
         assert vocab2.get_token_index('a2', namespace='a') == 2
 
         # Check namespace b.
-        assert vocab2.get_vocab_size(namespace='b') == 4  # (unk + padding + two tokens)
-        assert vocab2.get_token_from_index(0, namespace='b') == vocab._padding_token
-        assert vocab2.get_token_from_index(1, namespace='b') == vocab._oov_token
+        # (unk + padding + two tokens)
+        assert vocab2.get_vocab_size(namespace='b') == 4
+        assert vocab2.get_token_from_index(
+            0, namespace='b') == vocab._padding_token
+        assert vocab2.get_token_from_index(
+            1, namespace='b') == vocab._oov_token
         assert vocab2.get_token_from_index(2, namespace='b') == 'b2'
         assert vocab2.get_token_from_index(3, namespace='b') == 'b3'
         assert vocab2.get_token_index(vocab._padding_token, namespace='b') == 0
@@ -84,5 +91,7 @@ class TestVocabulary(AllenNlpTestCase):
         assert vocab2.get_token_index('b3', namespace='b') == 3
 
         # Check the dictionaries containing the reverse mapping are identical.
-        assert vocab.get_index_to_token_vocabulary("a") == vocab2.get_index_to_token_vocabulary("a")
-        assert vocab.get_index_to_token_vocabulary("b") == vocab2.get_index_to_token_vocabulary("b")
+        assert vocab.get_index_to_token_vocabulary(
+            "a") == vocab2.get_index_to_token_vocabulary("a")
+        assert vocab.get_index_to_token_vocabulary(
+            "b") == vocab2.get_index_to_token_vocabulary("b")

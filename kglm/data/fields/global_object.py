@@ -19,6 +19,7 @@ class GlobalObject(Field):
         "With great power comes great responsibility"
             - Uncle Ben
     """
+
     def __init__(self, global_object: Any) -> None:
         self._global_object = global_object
 

@@ -1,6 +1,6 @@
 import torch
-from torch.nn import Parameter
 import torch.nn.functional as F
+from torch.nn import Parameter
 
 
 class WeightDrop(torch.nn.Module):
@@ -12,16 +12,18 @@ class WeightDrop(torch.nn.Module):
         self.weights = weights
         self.dropout = dropout
         for weight in self.weights:
-            #Makes a copy of the weights of the selected layers.
+            # Makes a copy of the weights of the selected layers.
             w = getattr(self.module, weight)
             self.register_parameter(f'{weight}_raw', Parameter(w.data))
-            self.module._parameters[weight] = F.dropout(w, p=self.dropout, training=False)
+            self.module._parameters[weight] = F.dropout(
+                w, p=self.dropout, training=False)
 
     def _setweights(self):
         "Apply dropout to the raw weights."
         for weight in self.weights:
             raw_w = getattr(self, f'{weight}_raw')
-            self.module._parameters[weight] = F.dropout(raw_w, p=self.dropout, training=self.training)
+            self.module._parameters[weight] = F.dropout(
+                raw_w, p=self.dropout, training=self.training)
 
     def forward(self, *args):
         self._setweights()
@@ -30,6 +32,7 @@ class WeightDrop(torch.nn.Module):
     def reset(self):
         for weight in self.weights:
             raw_w = getattr(self, f'{weight}_raw')
-            self.module._parameters[weight] = F.dropout(raw_w, p=self.dropout, training=False)
-        if hasattr(self.module, 'reset'): self.module.reset()
-
+            self.module._parameters[weight] = F.dropout(
+                raw_w, p=self.dropout, training=False)
+        if hasattr(self.module, 'reset'):
+            self.module.reset()

@@ -1,13 +1,13 @@
-from collections import defaultdict
 import logging
 import pickle
+from collections import defaultdict
 from typing import Any, Dict, List, Set, Tuple
 
+import numpy as np
+import torch
 from allennlp.common.tqdm import Tqdm
 from allennlp.data import Vocabulary
 from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
-import numpy as np
-import torch
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ def tokenize_to_string(text: str, tokenizer: Tokenizer) -> List[str]:
 
 class AliasDatabase:
     """A Database of Aliases"""
+
     def __init__(self,
                  token_lookup: Dict[str, AliasList],
                  id_map_lookup: Dict[str, Dict[str, int]],
@@ -43,7 +44,8 @@ class AliasDatabase:
     @classmethod
     def load(cls, path: str):
 
-        logger.info('Loading alias database from "%s". This will probably take a second.', path)
+        logger.info(
+            'Loading alias database from "%s". This will probably take a second.', path)
         # TODO: Pretokenize the database to match the tokenization of the data itself. This
         # shouldn't be an issue ATM since I believe WordTokenizer() also uses SpaCy. But better to
         # air on the side of caution...
@@ -64,7 +66,8 @@ class AliasDatabase:
                     token_to_entity_lookup[token].add(entity)
 
             # Start by tokenizing the aliases
-            tokenized_aliases: AliasList = [tokenize_to_string(alias, tokenizer)[:MAX_TOKENS] for alias in aliases]
+            tokenized_aliases: AliasList = [tokenize_to_string(
+                alias, tokenizer)[:MAX_TOKENS] for alias in aliases]
             tokenized_aliases = tokenized_aliases[:MAX_ALIASES]
             token_lookup[entity] = tokenized_aliases
 
@@ -78,7 +81,8 @@ class AliasDatabase:
 
             # Lastly create an array associating the tokens in the alias to their corresponding ids.
             num_aliases = len(tokenized_aliases)
-            max_alias_length = max(len(tokenized_alias) for tokenized_alias in tokenized_aliases)
+            max_alias_length = max(len(tokenized_alias)
+                                   for tokenized_alias in tokenized_aliases)
             id_array = np.zeros((num_aliases, max_alias_length), dtype=int)
             for i, tokenized_alias in enumerate(tokenized_aliases):
                 for j, token in enumerate(tokenized_alias):
@@ -113,7 +117,8 @@ class AliasDatabase:
 
         logger.debug('Tensorizing AliasDatabase')
 
-        entity_idx_to_token = vocab.get_index_to_token_vocabulary('raw_entity_ids')
+        entity_idx_to_token = vocab.get_index_to_token_vocabulary(
+            'raw_entity_ids')
         for i in range(len(entity_idx_to_token)):  # pylint: disable=C0200
             entity = entity_idx_to_token[i]
             try:
@@ -127,17 +132,20 @@ class AliasDatabase:
 
             # Construct tensor of alias token indices from the global vocabulary.
             num_aliases = len(tokenized_aliases)
-            max_alias_length = max(len(tokenized_alias) for tokenized_alias in tokenized_aliases)
+            max_alias_length = max(len(tokenized_alias)
+                                   for tokenized_alias in tokenized_aliases)
             global_id_tensor = torch.zeros(num_aliases, max_alias_length, dtype=torch.int64,
                                            requires_grad=False)
             for j, tokenized_alias in enumerate(tokenized_aliases):
                 for k, token in enumerate(tokenized_alias):
                     # WARNING: Extremely janky cast to string
-                    global_id_tensor[j, k] = vocab.get_token_index(str(token), 'tokens')
+                    global_id_tensor[j, k] = vocab.get_token_index(
+                        str(token), 'tokens')
             self._global_id_lookup.append(global_id_tensor)
 
             # Convert array of local alias token indices into a tensor
-            local_id_tensor = torch.tensor(self._id_array_lookup[entity], requires_grad=False)  # pylint: disable=not-callable
+            local_id_tensor = torch.tensor(
+                self._id_array_lookup[entity], requires_grad=False)  # pylint: disable=not-callable
             self._local_id_lookup.append(local_id_tensor)
 
         # Build the tensorized token -> potential entities lookup.
@@ -155,7 +163,8 @@ class AliasDatabase:
                                                     dtype=torch.int64,
                                                     requires_grad=False)
                 self._token_id_to_entity_id_lookup.append(potential_entity_ids)
-        self._num_entities = vocab.get_vocab_size('entity_ids')  # Needed to get one-hot vector length
+        self._num_entities = vocab.get_vocab_size(
+            'entity_ids')  # Needed to get one-hot vector length
 
         self.is_tensorized = True
 
@@ -176,8 +185,10 @@ class AliasDatabase:
                 global_indices = self._global_id_lookup[entity_id]
                 if local_indices is not None:
                     num_aliases, alias_length = local_indices.shape
-                    local_tensor[i, j, :num_aliases, :alias_length] = local_indices
-                    global_tensor[i, j, :num_aliases, :alias_length] = global_indices
+                    local_tensor[i, j, :num_aliases,
+                                 :alias_length] = local_indices
+                    global_tensor[i, j, :num_aliases,
+                                  :alias_length] = global_indices
 
         return global_tensor, local_tensor
 

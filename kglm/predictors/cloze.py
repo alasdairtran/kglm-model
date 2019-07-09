@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
+import torch
 from allennlp.common.util import JsonDict
 from allennlp.data import DatasetReader, Instance
 from allennlp.data.dataset import Batch
@@ -11,9 +13,7 @@ from allennlp.models import Model
 from allennlp.models.archival import Archive, load_archive
 from allennlp.nn import util
 from allennlp.predictors import Predictor
-import numpy as np
 from overrides import overrides
-import torch
 
 from kglm.data import SequentialArrayField
 
@@ -52,7 +52,8 @@ class ClozePredictor(Predictor):
         # }]
         # data = {'tokens': [tokens], 'annotations': annotations}
         # conditioning_instance = self._dataset_reader.text_to_instance(data)
-        conditioning_instance = self._dataset_reader.text_to_instance(tokens[:-1])
+        conditioning_instance = self._dataset_reader.text_to_instance(
+            tokens[:-1])
 
         # Manually add the reset field here
         reset = SequentialArrayField(np.array(1), dtype=np.uint8)
@@ -70,12 +71,14 @@ class ClozePredictor(Predictor):
 
         # data = {'tokens': [[tokens[-1]]]}
         # generative_instance = self._dataset_reader.text_to_instance(data)
-        generative_instance = self._dataset_reader.text_to_instance([tokens[-1]])
+        generative_instance = self._dataset_reader.text_to_instance([
+                                                                    tokens[-1]])
         # Manually add the reset field here
         reset = SequentialArrayField(np.array(0), dtype=np.uint8)
         generative_instance.add_field('reset', reset)
         if 'shortlist' in json_dict:
-            generative_instance.add_field('shortlist', conditioning_instance.fields['shortlist'])
+            generative_instance.add_field(
+                'shortlist', conditioning_instance.fields['shortlist'])
 
         return conditioning_instance, generative_instance
 
@@ -93,23 +96,28 @@ class ClozePredictor(Predictor):
             cuda_device = self._model._get_prediction_device()
             conditioning_batch = Batch([conditioning_instance] * num_samples)
             conditioning_batch.index_instances(self._model.vocab)
-            conditioning_batch = util.move_to_device(conditioning_batch.as_tensor_dict(), cuda_device)
+            conditioning_batch = util.move_to_device(
+                conditioning_batch.as_tensor_dict(), cuda_device)
 
             generative_batch = Batch([generative_instance] * num_samples)
             generative_batch.index_instances(self._model.vocab)
-            generative_batch = util.move_to_device(generative_batch.as_tensor_dict(), cuda_device)
+            generative_batch = util.move_to_device(
+                generative_batch.as_tensor_dict(), cuda_device)
 
             # Sample annotations and generate next token
             self._model._use_shortlist = True
-            conditioning_output = self._model.sample(**conditioning_batch, emit_tokens=False)
+            conditioning_output = self._model.sample(
+                **conditioning_batch, emit_tokens=False)
             logger.debug('clears condition generation')
             # self._model(**conditioning_output)  # Shouldn't need to do this, but just in case
             # logger.debug('clears reconditioning')
-            generative_output = self._model.sample(**generative_batch, emit_tokens=True)
+            generative_output = self._model.sample(
+                **generative_batch, emit_tokens=True)
             logger.debug('clears generation')
             del conditioning_batch, generative_batch
 
-            aggregate_word_probs = self._aggregate_word_probs(generative_output)
+            aggregate_word_probs = self._aggregate_word_probs(
+                generative_output)
             logger.debug('clears word probs')
 
             return aggregate_word_probs
@@ -131,7 +139,8 @@ class ClozePredictor(Predictor):
         # Average source vocab prob is easy to compute
         source_vocab_avg = source_vocab_probs.mean(0).squeeze()
         prob_dict = dict()
-        index_to_token_vocabulary = vocab.get_index_to_token_vocabulary('tokens')
+        index_to_token_vocabulary = vocab.get_index_to_token_vocabulary(
+            'tokens')
         for i, prob in enumerate(source_vocab_avg):
             word = index_to_token_vocabulary[i]
             prob_dict[word] = prob.item()
@@ -146,11 +155,13 @@ class ClozePredictor(Predictor):
             if raw_entity_id == 0:
                 continue
 
-            entity = vocab.get_token_from_index(raw_entity_id.item(), 'raw_entity_ids')
+            entity = vocab.get_token_from_index(
+                raw_entity_id.item(), 'raw_entity_ids')
             try:
                 id_map = alias_database._id_map_lookup[entity]
             except:
-                logger.warning('Error could not find id map for entity "%s"', entity)
+                logger.warning(
+                    'Error could not find id map for entity "%s"', entity)
                 continue
             reverse_id_map = {i: x for x, i in id_map.items()}
             for ind, prob in zip(alias_index, copy_probs.squeeze().tolist()):

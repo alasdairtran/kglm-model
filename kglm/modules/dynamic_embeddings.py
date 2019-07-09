@@ -1,9 +1,9 @@
 from typing import Dict, Optional
 
-from overrides import overrides
 import torch
-from torch.nn import Module, Parameter
 import torch.nn.functional as F
+from overrides import overrides
+from torch.nn import Module, Parameter
 
 
 class DynamicEmbedding(Module):
@@ -23,6 +23,7 @@ class DynamicEmbedding(Module):
     max_embeddings : ``int``
         Maximum number of allowed embeddings.
     """
+
     def __init__(self,
                  embedding_dim: int,
                  max_embeddings: int) -> None:
@@ -30,9 +31,11 @@ class DynamicEmbedding(Module):
 
         self._embedding_dim = embedding_dim
         self._max_embeddings = max_embeddings
-        self._initial_embedding = Parameter(F.normalize(torch.randn(embedding_dim), dim=0))
+        self._initial_embedding = Parameter(
+            F.normalize(torch.randn(embedding_dim), dim=0))
 
-        self._distance_scalar = Parameter(torch.tensor(1e-6))  # pylint: disable=E1102
+        self._distance_scalar = Parameter(
+            torch.tensor(1e-6))  # pylint: disable=E1102
         self._embedding_projection = torch.nn.Linear(in_features=embedding_dim,
                                                      out_features=embedding_dim,
                                                      bias=False)
@@ -41,7 +44,8 @@ class DynamicEmbedding(Module):
                                                  bias=False)
 
         self.embeddings: torch.Tensor = None  # Storage for embeddings
-        self.num_embeddings: torch.Tensor = None  # Tracks how many embeddings are in use
+        # Tracks how many embeddings are in use
+        self.num_embeddings: torch.Tensor = None
         self.last_seen: torch.Tensor = None  # Tracks last time embedding was seen
 
     def reset_states(self, batch_size: int) -> None:
@@ -55,7 +59,8 @@ class DynamicEmbedding(Module):
         """
         self.embeddings = self._initial_embedding.new_zeros(batch_size, self._max_embeddings,
                                                             self._embedding_dim)
-        self.num_embeddings = self._initial_embedding.new_zeros(batch_size, dtype=torch.int64)
+        self.num_embeddings = self._initial_embedding.new_zeros(
+            batch_size, dtype=torch.int64)
         self.last_seen = self._initial_embedding.new_zeros(batch_size, self._max_embeddings,
                                                            dtype=torch.int64)
         self.add_embeddings(0)
@@ -91,7 +96,8 @@ class DynamicEmbedding(Module):
         # Embeddings are initialized by adding a small amount of random noise to the initial
         # embedding tensor then normalizing.
         initial = self._initial_embedding.repeat((mask.sum(), 1, 1))
-        noise = 1e-4 * torch.randn_like(initial)  # 1e-4 is a magic number from the original implementation
+        # 1e-4 is a magic number from the original implementation
+        noise = 1e-4 * torch.randn_like(initial)
         unnormalized = initial + noise
         normalized = F.normalize(unnormalized, dim=-1)
 
@@ -194,20 +200,22 @@ class DynamicEmbedding(Module):
         bilinear = bilinear.view(batch_size, -1)
 
         # Second half of equation 4.
-        distance_score = torch.exp(self._distance_scalar * self.last_seen[mask].float())
+        distance_score = torch.exp(
+            self._distance_scalar * self.last_seen[mask].float())
         logits = bilinear + distance_score
 
         # Since we pre-allocate the embedding array, logits includes scores for all of the
         # embeddings which have not yet been initialized. We create a mask to indicate which scores
         # should be used for prediction / loss calculation.
         num_embeddings = self.num_embeddings[mask].unsqueeze(1)
-        arange = torch.arange(self._max_embeddings, device=num_embeddings.device).repeat(mask.sum(), 1)
+        arange = torch.arange(
+            self._max_embeddings, device=num_embeddings.device).repeat(mask.sum(), 1)
         logit_mask = arange.lt(num_embeddings)
         logits[logit_mask != 1] = -float('inf')
 
         out = {
-                'logits': logits,
-                'logit_mask': logit_mask
+            'logits': logits,
+            'logit_mask': logit_mask
         }
 
         if target is not None:

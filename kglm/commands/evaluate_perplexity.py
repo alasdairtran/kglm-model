@@ -4,17 +4,17 @@ import logging
 import math
 from typing import Any, Dict, Iterator
 
+import torch
 from allennlp.commands.subcommand import Subcommand
-from allennlp.common.util import prepare_environment
 from allennlp.common.checks import check_for_gpu
 from allennlp.common.tqdm import Tqdm
+from allennlp.common.util import prepare_environment
 from allennlp.data import Instance
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.iterators import BasicIterator, DataIterator
 from allennlp.models import Model
 from allennlp.models.archival import load_archive
 from allennlp.nn import util
-import torch
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +26,17 @@ class EvaluatePerplexity(Subcommand):
         subparser = parser.add_parser(name, description=description,
                                       help='Evaluate the specified module using importance sampling')
 
-        subparser.add_argument('model_archive_file', type=str, help='path to an archived trained model')
+        subparser.add_argument(
+            'model_archive_file', type=str, help='path to an archived trained model')
 
         subparser.add_argument('sampler_archive_file', type=str,
                                help='path to an archived trained model for generating samples')
 
-        subparser.add_argument('input_file', type=str, help='path to the file containing the evaluation data')
+        subparser.add_argument(
+            'input_file', type=str, help='path to the file containing the evaluation data')
 
-        subparser.add_argument('--output-file', type=str, help='path to output file')
+        subparser.add_argument('--output-file', type=str,
+                               help='path to output file')
 
         subparser.add_argument('--weights-file',
                                type=str,
@@ -95,7 +98,8 @@ def evaluate_perplexity(model: Model,
                 batch = util.move_to_device(batch, cuda_device)
 
                 # We need sequence length to help compute perplexity
-                n_tokens = util.get_text_field_mask(batch['source']).float().sum().item()
+                n_tokens = util.get_text_field_mask(
+                    batch['source']).float().sum().item()
                 denom += n_tokens
 
                 # Draw a sample
@@ -108,7 +112,8 @@ def evaluate_perplexity(model: Model,
                 model_logp = model_output['logp']
                 model_penalized_logp = model_output['penalized_logp']
                 summand += (model_logp - sample_logp).item()
-                penalized_summand += (model_penalized_logp - sample_logp).item()
+                penalized_summand += (model_penalized_logp -
+                                      sample_logp).item()
 
             summands.append(summand)
             penalized_summands.append(penalized_summand)
@@ -127,30 +132,37 @@ def evaluate_perplexity(model: Model,
     metrics = {'ppl': ppl, 'upp': upp}
     return metrics
 
+
 def evaluate_from_args(args: argparse.Namespace) -> Dict[str, Any]:
     # Disable some of the more verbose logging statements
     logging.getLogger('allennlp.common.params').disabled = True
     logging.getLogger('allennlp.nn.initializers').disabled = True
-    logging.getLogger('allennlp.modules.token_embedders.embedding').setLevel(logging.INFO)
+    logging.getLogger(
+        'allennlp.modules.token_embedders.embedding').setLevel(logging.INFO)
 
     # Load model from archive
-    model_archive = load_archive(args.model_archive_file, args.cuda_device, args.overrides, args.weights_file)
+    model_archive = load_archive(
+        args.model_archive_file, args.cuda_device, args.overrides, args.weights_file)
     config = model_archive.config
     prepare_environment(config)
     model = model_archive.model
     model.eval()
 
     # Load sampler
-    sampler_archive = load_archive(args.sampler_archive_file, args.cuda_device, args.overrides, args.weights_file)
+    sampler_archive = load_archive(
+        args.sampler_archive_file, args.cuda_device, args.overrides, args.weights_file)
     sampler = sampler_archive.model
     sampler.eval()
 
     # Load the evaluation data. NOTE: We are using the model's reader!
-    validation_dataset_reader_params = config.pop('validation_dataset_reader', None)
+    validation_dataset_reader_params = config.pop(
+        'validation_dataset_reader', None)
     if validation_dataset_reader_params is not None:
-        dataset_reader = DatasetReader.from_params(validation_dataset_reader_params)
+        dataset_reader = DatasetReader.from_params(
+            validation_dataset_reader_params)
     else:
-        dataset_reader = DatasetReader.from_params(config.pop('dataset_reader'))
+        dataset_reader = DatasetReader.from_params(
+            config.pop('dataset_reader'))
     evaluation_data_path = args.input_file
     logger.info('Reading evaluation data from: %s', evaluation_data_path)
     instances = dataset_reader.read(evaluation_data_path)
@@ -161,7 +173,8 @@ def evaluate_from_args(args: argparse.Namespace) -> Dict[str, Any]:
     iterator = DataIterator.from_params(iterator_params)
     iterator.index_with(model.vocab)
     iterator.eval()
-    metrics = evaluate_perplexity(model, sampler, args.num_samples, instances, iterator, args.cuda_device)
+    metrics = evaluate_perplexity(
+        model, sampler, args.num_samples, instances, iterator, args.cuda_device)
 
     logger.info('Finished evaluating.')
     logger.info('Metrics:')
@@ -173,4 +186,3 @@ def evaluate_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         with open(output_file, 'w') as f:
             json.dump(metrics, f, indent=4)
     return metrics
-

@@ -3,13 +3,14 @@ import logging
 import random
 from typing import Iterable, Iterator, List, Tuple, Union
 
-from allennlp.common.registrable import Registrable
-from allennlp.data.iterators import BucketIterator
-from allennlp.data.iterators.data_iterator import DataIterator, TensorDict, add_epoch_number
-from allennlp.data.instance import Instance
 import numpy as np
-from overrides import overrides
 import torch
+from allennlp.common.registrable import Registrable
+from allennlp.data.instance import Instance
+from allennlp.data.iterators import BucketIterator
+from allennlp.data.iterators.data_iterator import (DataIterator, TensorDict,
+                                                   add_epoch_number)
+from overrides import overrides
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,12 @@ def get_sequence_length(tensorized_field: Union[torch.Tensor, TensorDict]) -> in
     elif isinstance(tensorized_field, dict):
         # We are making the extreme assumption that all of the tensors in a nested TensorDict have
         # the same sequence length.
-        tensorized_subfield = next(iter(tensorized_field.values()))  # Get any value
+        tensorized_subfield = next(
+            iter(tensorized_field.values()))  # Get any value
         return get_sequence_length(tensorized_subfield)
     else:
-        raise RuntimeError('Failed to get sequence length of one of the fields.')
+        raise RuntimeError(
+            'Failed to get sequence length of one of the fields.')
 
 
 class Splitter(Registrable):
@@ -44,8 +47,10 @@ class Splitter(Registrable):
     def __call__(self, tensor_dict: TensorDict, truncate_at: int) -> Iterable[TensorDict]:
 
         if not all(key in tensor_dict for key in self._splitting_keys):
-            missing_keys = [key for key in self._splitting_keys if key not in tensor_dict]
-            raise RuntimeError('Tensor dict is missing splitting keys: %s' % missing_keys)
+            missing_keys = [
+                key for key in self._splitting_keys if key not in tensor_dict]
+            raise RuntimeError(
+                'Tensor dict is missing splitting keys: %s' % missing_keys)
 
         sequence_length = truncate_at
 
@@ -56,7 +61,8 @@ class Splitter(Registrable):
             split_indices[-2] = split_indices[-1]
             del split_indices[-1]
         for i, (start, stop) in enumerate(zip(split_indices[:-1], split_indices[1:])):
-            sliced_tensor_dict = self._slice_tensor_dict(tensor_dict, start, stop)
+            sliced_tensor_dict = self._slice_tensor_dict(
+                tensor_dict, start, stop)
             if i == 0:
                 sliced_tensor_dict['reset'] = True
             else:
@@ -85,9 +91,11 @@ class Splitter(Registrable):
             elif isinstance(tensor_or_dict, dict):
                 return {key: _recursion(value) for key, value in tensor_or_dict.items()}
             else:
-                raise ValueError('Splitter encountered unexpected value in tensor_dict')
+                raise ValueError(
+                    'Splitter encountered unexpected value in tensor_dict')
 
-        other_keys = [key for key in tensor_dict.keys() if key not in self._splitting_keys]
+        other_keys = [key for key in tensor_dict.keys(
+        ) if key not in self._splitting_keys]
         out = {key: tensor_dict[key] for key in other_keys}
         for key in self._splitting_keys:
             out[key] = _recursion(tensor_dict[key])
@@ -173,6 +181,7 @@ class SplitIterator(BucketIterator):
     maximum_samples_per_batch : ``Tuple[str, int]``, (default = None)
         See :class:`BasicIterator`.
     """
+
     def __init__(self,
                  splitter: Splitter,
                  sorting_keys: List[Tuple[str, str]],
@@ -252,7 +261,6 @@ class SplitIterator(BucketIterator):
 
                     if self.vocab is not None:
                         batch.index_instances(self.vocab)
-
 
                     # In order to make  gradient updates fair in expectation,
                     # we randomly choose a sequence to cutoff at.

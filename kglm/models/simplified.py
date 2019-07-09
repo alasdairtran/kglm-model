@@ -2,18 +2,18 @@ import logging
 import math
 from typing import Any, Dict, List, Optional
 
-from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
-from allennlp.models import Model
-from allennlp.nn import InitializerApplicator
-from allennlp.nn.util import get_text_field_mask, masked_log_softmax, \
-    sequence_cross_entropy_with_logits
-from overrides import overrides
 import torch
 import torch.nn.functional as F
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
+from allennlp.models import Model
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
+from allennlp.nn import InitializerApplicator
+from allennlp.nn.util import (get_text_field_mask, masked_log_softmax,
+                              sequence_cross_entropy_with_logits)
+from overrides import overrides
 
 from kglm.data import AliasDatabase
-from kglm.modules import embedded_dropout, LockedDropout, WeightDrop
+from kglm.modules import LockedDropout, WeightDrop, embedded_dropout
 from kglm.training.metrics import Ppl
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class AliasCopynet(Model):
     embedding_dim : ``int``
         The dimension of entity / length embeddings. Should match the encoder output size.
     """
+
     def __init__(self,
                  vocab: Vocabulary,
                  token_embedder: TextFieldEmbedder,
@@ -91,8 +92,10 @@ class AliasCopynet(Model):
                 output_size = token_embedding_dim
             else:
                 output_size = hidden_size
-            rnns.append(torch.nn.LSTM(input_size, output_size, batch_first=True))
-        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop) for rnn in rnns]
+            rnns.append(torch.nn.LSTM(
+                input_size, output_size, batch_first=True))
+        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop)
+                for rnn in rnns]
         self.rnns = torch.nn.ModuleList(rnns)
 
         # Various linear transformations.
@@ -119,7 +122,7 @@ class AliasCopynet(Model):
         if tie_weights:
             self._fc_generate.weight = self._token_embedder.weight
 
-        self._state: Optional[Dict[str, Any]]= None
+        self._state: Optional[Dict[str, Any]] = None
 
         # Metrics
         # self._avg_mention_loss = Average()
@@ -237,9 +240,11 @@ class AliasCopynet(Model):
         # This part gets a little funky - we need to make sure that the first dimension in
         # `projected` and `hidden` is batch_size x sequence_length.
         encoded = encoded.view(batch_size * sequence_length, 1, -1)
-        projected = projected.view(batch_size * sequence_length, -1, alias_length)
+        projected = projected.view(
+            batch_size * sequence_length, -1, alias_length)
         copy_scores = torch.bmm(encoded, projected).squeeze()
-        copy_scores = copy_scores.view(batch_size, sequence_length, -1).contiguous()
+        copy_scores = copy_scores.view(
+            batch_size, sequence_length, -1).contiguous()
 
         return copy_scores
 
@@ -268,7 +273,8 @@ class AliasCopynet(Model):
         # GENERATE LOSS ###
         # The generated token loss is a simple cross-entropy calculation, we can just gather
         # the log probabilties...
-        flattened_log_probs = generate_log_probs.view(batch_size * sequence_length, -1)
+        flattened_log_probs = generate_log_probs.view(
+            batch_size * sequence_length, -1)
         generate_log_probs = flattened_log_probs.gather(1, flattened_targets)
         # ...except we need to ignore the contribution of UNK tokens that are
         # copied (always in the simplified model). To do that we create a mask
@@ -277,14 +283,16 @@ class AliasCopynet(Model):
         copied = target_alias_indices.gt(0).view(-1, 1)
         generate_mask = ~copied & flattened_mask
         # Since we are in log-space we apply the mask by addition.
-        generate_log_probs = generate_log_probs + (generate_mask.float() + 1e-45).log()
+        generate_log_probs = generate_log_probs + \
+            (generate_mask.float() + 1e-45).log()
 
         # COPY LOSS ###
         copy_log_probs = copy_log_probs.view(batch_size * sequence_length, -1)
         # When computing the loss we need to get the log probability of **only** the copied tokens.
         alias_indices = alias_indices.view(batch_size * sequence_length, -1)
         target_alias_indices = target_alias_indices.view(-1, 1)
-        copy_mask = alias_indices.eq(target_alias_indices) & flattened_mask & target_alias_indices.gt(0)
+        copy_mask = alias_indices.eq(
+            target_alias_indices) & flattened_mask & target_alias_indices.gt(0)
         copy_log_probs = copy_log_probs + (copy_mask.float() + 1e-45).log()
 
         # COMBINED LOSS ###
@@ -299,7 +307,8 @@ class AliasCopynet(Model):
                                        dim=1)
         combined_log_probs = torch.logsumexp(combined_log_probs,
                                              dim=1)
-        vocab_loss = -combined_log_probs[mask].sum() / (mask.float().sum() + 1e-13)
+        vocab_loss = - \
+            combined_log_probs[mask].sum() / (mask.float().sum() + 1e-13)
 
         # PERPLEXITY ###
         # Our perplexity terms are computed using the log probs computed w.r.t the source
@@ -316,9 +325,11 @@ class AliasCopynet(Model):
         self._ppl(-combined_log_probs[mask].sum(), mask.float().sum() + 1e-13)
         self._upp(-penalized_log_probs[mask].sum(), mask.float().sum() + 1e-13)
         if kg_mask.any():
-            self._kg_ppl(-combined_log_probs[kg_mask].sum(), kg_mask.float().sum() + 1e-13)
+            self._kg_ppl(-combined_log_probs[kg_mask].sum(),
+                         kg_mask.float().sum() + 1e-13)
         if bg_mask.any():
-            self._bg_ppl(-combined_log_probs[bg_mask].sum(), bg_mask.float().sum() + 1e-13)
+            self._bg_ppl(-combined_log_probs[bg_mask].sum(),
+                         bg_mask.float().sum() + 1e-13)
 
         return vocab_loss
 
@@ -339,7 +350,8 @@ class AliasCopynet(Model):
             embed=self._token_embedder,
             words=source,
             dropout=self._dropoute if self.training else 0)
-        source_embeddings = self._locked_dropout(source_embeddings, self._dropouti)
+        source_embeddings = self._locked_dropout(
+            source_embeddings, self._dropouti)
 
         # Encode source tokens.
         current_input = source_embeddings
@@ -390,7 +402,8 @@ class AliasCopynet(Model):
             loss = loss + self._alpha * dropped_output.pow(2).mean()
         # Temporal activation regularization (slowness)
         if self._beta:
-            loss = loss + self._beta * (output[:, 1:] - output[:, :-1]).pow(2).mean()
+            loss = loss + self._beta * \
+                (output[:, 1:] - output[:, :-1]).pow(2).mean()
 
         return {'loss': loss}
 

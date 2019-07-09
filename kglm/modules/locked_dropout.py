@@ -1,5 +1,6 @@
 import torch
 
+
 class LockedDropout(torch.nn.Module):
     def forward(self,  # pylint: disable=arguments-differ
                 x: torch.Tensor,
@@ -10,4 +11,3 @@ class LockedDropout(torch.nn.Module):
         mask = mask / (1 - dropout)
         mask = mask.expand_as(x)
         return mask * x
-

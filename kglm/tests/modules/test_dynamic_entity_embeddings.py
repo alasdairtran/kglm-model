@@ -1,8 +1,8 @@
 from unittest import TestCase
 
+import torch
 from allennlp.common import Params
 from allennlp.nn.initializers import Initializer, InitializerApplicator
-import torch
 
 from kglm.modules import DynamicEmbedding
 
@@ -17,11 +17,16 @@ class TestDynamicEmbedding(TestCase):
 
         dynamic_embedding = DynamicEmbedding(embedding_dim, max_embeddings)
 
-        self.assertEqual(dynamic_embedding._initial_embedding.shape, (embedding_dim,))
-        self.assertEqual(dynamic_embedding._embedding_projection.in_features, embedding_dim)
-        self.assertEqual(dynamic_embedding._embedding_projection.out_features, embedding_dim)
-        self.assertEqual(dynamic_embedding._embedding_projection.in_features, embedding_dim)
-        self.assertEqual(dynamic_embedding._embedding_projection.out_features, embedding_dim)
+        self.assertEqual(
+            dynamic_embedding._initial_embedding.shape, (embedding_dim,))
+        self.assertEqual(
+            dynamic_embedding._embedding_projection.in_features, embedding_dim)
+        self.assertEqual(
+            dynamic_embedding._embedding_projection.out_features, embedding_dim)
+        self.assertEqual(
+            dynamic_embedding._embedding_projection.in_features, embedding_dim)
+        self.assertEqual(
+            dynamic_embedding._embedding_projection.out_features, embedding_dim)
         self.assertIsNone(dynamic_embedding.embeddings)
         self.assertIsNone(dynamic_embedding.num_embeddings)
         self.assertIsNone(dynamic_embedding.last_seen)

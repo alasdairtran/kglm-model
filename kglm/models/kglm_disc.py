@@ -2,20 +2,22 @@ import logging
 import math
 from typing import Any, Dict, List, Optional
 
-from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
-from allennlp.models import Model
-from allennlp.nn import InitializerApplicator
-from allennlp.nn.util import (get_text_field_mask, masked_log_softmax, masked_softmax,
-    sequence_cross_entropy_with_logits)
-from allennlp.training.metrics import Average, CategoricalAccuracy, F1Measure, SequenceAccuracy
-from overrides import overrides
 import torch
 import torch.nn.functional as F
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
+from allennlp.models import Model
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
+from allennlp.nn import InitializerApplicator
+from allennlp.nn.util import (get_text_field_mask, masked_log_softmax,
+                              masked_softmax,
+                              sequence_cross_entropy_with_logits)
+from allennlp.training.metrics import (Average, CategoricalAccuracy, F1Measure,
+                                       SequenceAccuracy)
+from overrides import overrides
 
 from kglm.data import AliasDatabase
-from kglm.modules import (embedded_dropout, LockedDropout, WeightDrop, KnowledgeGraphLookup,
-    RecentEntities)
+from kglm.modules import (KnowledgeGraphLookup, LockedDropout, RecentEntities,
+                          WeightDrop, embedded_dropout)
 from kglm.nn.util import nested_enumerate, parallel_sample
 from kglm.training.metrics import Ppl
 
@@ -32,6 +34,7 @@ class KglmDisc(Model):
     vocab : ``Vocabulary``
         The model vocabulary.
     """
+
     def __init__(self,
                  vocab: Vocabulary,
                  token_embedder: TextFieldEmbedder,
@@ -59,7 +62,8 @@ class KglmDisc(Model):
         self._entity_embedder = entity_embedder._token_embedders['entity_ids']
         self._relation_embedder = relation_embedder._token_embedders['relations']
         self._recent_entities = RecentEntities(cutoff=cutoff)
-        self._knowledge_graph_lookup = KnowledgeGraphLookup(knowledge_graph_path, vocab=vocab)
+        self._knowledge_graph_lookup = KnowledgeGraphLookup(
+            knowledge_graph_path, vocab=vocab)
         self._use_shortlist = use_shortlist
         self._hidden_size = hidden_size
         self._num_layers = num_layers
@@ -94,8 +98,10 @@ class KglmDisc(Model):
                 output_size = token_embedding_dim + 2 * entity_embedding_dim
             else:
                 output_size = hidden_size
-            rnns.append(torch.nn.LSTM(input_size, output_size, batch_first=True))
-        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop) for rnn in rnns]
+            rnns.append(torch.nn.LSTM(
+                input_size, output_size, batch_first=True))
+        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop)
+                for rnn in rnns]
         self.rnns = torch.nn.ModuleList(rnns)
 
         # Various linear transformations.
@@ -121,7 +127,7 @@ class KglmDisc(Model):
         self._avg_mention_type_loss = Average()
         self._avg_new_entity_loss = Average()
         self._avg_knowledge_graph_entity_loss = Average()
-        self._new_mention_f1 =  F1Measure(positive_label=1)
+        self._new_mention_f1 = F1Measure(positive_label=1)
         self._kg_mention_f1 = F1Measure(positive_label=2)
         self._new_entity_accuracy = CategoricalAccuracy()
         self._new_entity_accuracy20 = CategoricalAccuracy(top_k=20)
@@ -164,39 +170,48 @@ class KglmDisc(Model):
         # **next** (e.g. target) token!
         encoded, *_ = self._encode_source(target['tokens'])
         splits = [self.token_embedding_dim] + [self.entity_embedding_dim] * 2
-        encoded_token, encoded_head, encoded_relation = encoded.split(splits, dim=-1)
+        encoded_token, encoded_head, encoded_relation = encoded.split(
+            splits, dim=-1)
 
         # Compute new mention logits
         mention_logits = self._fc_mention_type(encoded_token)
         mention_probs = F.softmax(mention_logits, dim=-1)
         mention_type = parallel_sample(mention_probs)
-        mention_logp = mention_probs.gather(-1, mention_type.unsqueeze(-1)).log()
+        mention_logp = mention_probs.gather(-1,
+                                            mention_type.unsqueeze(-1)).log()
         mention_logp[~mask] = 0
         mention_logp = mention_logp.sum()
 
         # Compute entity logits
         new_entity_mask = mention_type.eq(1)
-        new_entity_logits = self._new_entity_logits(encoded_head + encoded_relation, shortlist)
+        new_entity_logits = self._new_entity_logits(
+            encoded_head + encoded_relation, shortlist)
         if self._use_shortlist:
             # If using shortlist, then samples are indexed w.r.t the shortlist and entity_ids must be looked up
             shortlist_mask = get_text_field_mask(shortlist)
-            new_entity_probs = masked_softmax(new_entity_logits, shortlist_mask)
+            new_entity_probs = masked_softmax(
+                new_entity_logits, shortlist_mask)
             shortlist_inds = torch.zeros_like(mention_type)
             # Some sequences may be full of padding in which case the shortlist
             # is empty
             not_just_padding = shortlist_mask.byte().any(-1)
-            shortlist_inds[not_just_padding] = parallel_sample(new_entity_probs[not_just_padding])
+            shortlist_inds[not_just_padding] = parallel_sample(
+                new_entity_probs[not_just_padding])
             shortlist_inds[~new_entity_mask] = 0
-            _new_entity_logp = new_entity_probs.gather(-1, shortlist_inds.unsqueeze(-1)).log()
-            new_entity_samples = shortlist['entity_ids'].gather(1, shortlist_inds)
+            _new_entity_logp = new_entity_probs.gather(
+                -1, shortlist_inds.unsqueeze(-1)).log()
+            new_entity_samples = shortlist['entity_ids'].gather(
+                1, shortlist_inds)
         else:
             # Get overlap feature
             overlap_feature = alias_database.reverse_lookup(target['tokens'])
-            new_entity_logits = new_entity_logits + self._overlap_weight * overlap_feature.float()
+            new_entity_logits = new_entity_logits + \
+                self._overlap_weight * overlap_feature.float()
             # If not using shortlist, then samples are indexed w.r.t to the global vocab
             new_entity_probs = F.softmax(new_entity_logits, dim=-1)
             new_entity_samples = parallel_sample(new_entity_probs)
-            _new_entity_logp = new_entity_probs.gather(-1, new_entity_samples.unsqueeze(-1)).log()
+            _new_entity_logp = new_entity_probs.gather(
+                -1, new_entity_samples.unsqueeze(-1)).log()
             shortlist_inds = None
         # Zero out masked tokens and non-new entity predictions
         _new_entity_logp[~mask] = 0
@@ -228,7 +243,8 @@ class KglmDisc(Model):
 
             # Update recent entities with **current** entity only
             current_entity_id = entity_ids[:, i].unsqueeze(1)
-            candidate_ids, candidate_mask = self._recent_entities(current_entity_id)
+            candidate_ids, candidate_mask = self._recent_entities(
+                current_entity_id)
 
             # If no mentions are derived, there is no point continuing after entities have been updated.
             if not current_mask.any():
@@ -239,7 +255,8 @@ class KglmDisc(Model):
 
             # Compute logits w.r.t **current** hidden state only
             current_head_encoding = encoded_head[:, i].unsqueeze(1)
-            selection_logits = torch.bmm(current_head_encoding, candidate_embeddings.transpose(1, 2))
+            selection_logits = torch.bmm(
+                current_head_encoding, candidate_embeddings.transpose(1, 2))
             selection_probs = masked_softmax(selection_logits, candidate_mask)
 
             # Only sample if the is at least one viable candidate (e.g. if a sampling distribution
@@ -247,24 +264,30 @@ class KglmDisc(Model):
             # non-viable distributions.
             viable_candidate_mask = candidate_mask.any(-1).squeeze()
             _parent_ids = torch.zeros_like(current_entity_id)
-            parent_logp = torch.zeros_like(current_entity_id, dtype=torch.float32)
+            parent_logp = torch.zeros_like(
+                current_entity_id, dtype=torch.float32)
             if viable_candidate_mask.any():
                 viable_candidate_ids = candidate_ids[viable_candidate_mask]
                 viable_candidate_probs = selection_probs[viable_candidate_mask]
                 viable_parent_samples = parallel_sample(viable_candidate_probs)
-                viable_logp = viable_candidate_probs.gather(-1, viable_parent_samples.unsqueeze(-1)).log()
-                viable_parent_ids = viable_candidate_ids.gather(-1, viable_parent_samples)
+                viable_logp = viable_candidate_probs.gather(
+                    -1, viable_parent_samples.unsqueeze(-1)).log()
+                viable_parent_ids = viable_candidate_ids.gather(
+                    -1, viable_parent_samples)
                 _parent_ids[viable_candidate_mask] = viable_parent_ids
                 parent_logp[viable_candidate_mask] = viable_logp.squeeze(-1)
 
-            parent_ids[current_mask, i] = _parent_ids[current_mask]  # TODO: Double-check
+            # TODO: Double-check
+            parent_ids[current_mask, i] = _parent_ids[current_mask]
             derived_entity_logp += parent_logp[current_mask].sum()
 
             ## SAMPLE RELATIONS ##
 
             # Lookup sampled parent ids in the knowledge graph
-            indices, parent_ids_list, relations_list, tail_ids_list = self._knowledge_graph_lookup(_parent_ids)
-            relation_embeddings = [self._relation_embedder(r) for r in relations_list]
+            indices, parent_ids_list, relations_list, tail_ids_list = self._knowledge_graph_lookup(
+                _parent_ids)
+            relation_embeddings = [
+                self._relation_embedder(r) for r in relations_list]
 
             # Sample tail ids
             current_relation_encoding = encoded_relation[:, i].unsqueeze(1)
@@ -274,7 +297,8 @@ class KglmDisc(Model):
                 # Compute the score for each relation w.r.t the current encoding. NOTE: In the loss
                 # code index has a slice. We don't need that here since there is always a
                 # **single** parent.
-                logits = torch.mv(relation_embedding, current_relation_encoding[index])
+                logits = torch.mv(relation_embedding,
+                                  current_relation_encoding[index])
                 # Convert to probability
                 tail_probs = F.softmax(logits, dim=-1)
                 # Sample
@@ -282,33 +306,41 @@ class KglmDisc(Model):
                 # Get logp. Ignoring the current_mask here is **super** dodgy, but since we forced
                 # null parents to zero we shouldn't be accumulating probabilities for unused predictions.
                 tail_logp = tail_probs.gather(-1, tail_sample).log()
-                derived_entity_logp += tail_logp.sum()  # Sum is redundant, just need it to make logp a scalar
+                # Sum is redundant, just need it to make logp a scalar
+                derived_entity_logp += tail_logp.sum()
 
                 # Map back to raw id
                 raw_tail_id = tail_id_lookup[tail_sample]
                 # Convert raw id to id
-                tail_id_string = self.vocab.get_token_from_index(raw_tail_id.item(), 'raw_entity_ids')
-                tail_id = self.vocab.get_token_index(tail_id_string, 'entity_ids')
+                tail_id_string = self.vocab.get_token_from_index(
+                    raw_tail_id.item(), 'raw_entity_ids')
+                tail_id = self.vocab.get_token_index(
+                    tail_id_string, 'entity_ids')
 
                 _raw_tail_ids[index[:-1]] = raw_tail_id
                 _tail_ids[index[:-1]] = tail_id
 
-            raw_entity_ids[current_mask, i] = _raw_tail_ids[current_mask]  # TODO: Double-check
-            entity_ids[current_mask, i] = _tail_ids[current_mask]  # TODO: Double-check
+            # TODO: Double-check
+            raw_entity_ids[current_mask, i] = _raw_tail_ids[current_mask]
+            # TODO: Double-check
+            entity_ids[current_mask, i] = _tail_ids[current_mask]
 
             self._recent_entities.insert(_tail_ids, current_mask)
 
             ## CONTINUE MENTIONS ##
             continue_mask = mention_type[:, i].eq(3) & mask[:, i]
-            if not current_mask.any() or i==0:
+            if not current_mask.any() or i == 0:
                 continue
-            raw_entity_ids[continue_mask, i] = raw_entity_ids[continue_mask, i-1]
+            raw_entity_ids[continue_mask,
+                           i] = raw_entity_ids[continue_mask, i-1]
             entity_ids[continue_mask, i] = entity_ids[continue_mask, i-1]
             entity_ids[continue_mask, i] = entity_ids[continue_mask, i-1]
             parent_ids[continue_mask, i] = parent_ids[continue_mask, i-1]
             if self._use_shortlist:
-                shortlist_inds[continue_mask, i] = shortlist_inds[continue_mask, i-1]
-            alias_copy_inds[continue_mask, i] = alias_copy_inds[continue_mask, i-1]
+                shortlist_inds[continue_mask,
+                               i] = shortlist_inds[continue_mask, i-1]
+            alias_copy_inds[continue_mask,
+                            i] = alias_copy_inds[continue_mask, i-1]
 
         # Lastly, because entities won't always match the true entity ids, we need to zero out any alias copy ids that won't be valid.
         true_raw_entity_ids = kwargs['raw_entity_ids']['raw_entity_ids']
@@ -325,7 +357,8 @@ class KglmDisc(Model):
             'raw_entity_ids': {'raw_entity_ids': raw_entity_ids},
             'entity_ids': {'entity_ids': entity_ids},
             'parent_ids': {'entity_ids': parent_ids},
-            'relations': {'relations': None},  # We aren't using them - eventually should remove entirely
+            # We aren't using them - eventually should remove entirely
+            'relations': {'relations': None},
             'shortlist': shortlist,  # Pass
             'shortlist_inds': shortlist_inds,
             'alias_copy_inds': alias_copy_inds
@@ -384,7 +417,8 @@ class KglmDisc(Model):
             embed=self._token_embedder,
             words=source,
             dropout=self._dropoute if self.training else 0)
-        source_embeddings = self._locked_dropout(source_embeddings, self._dropouti)
+        source_embeddings = self._locked_dropout(
+            source_embeddings, self._dropouti)
 
         # Encode.
         current_input = source_embeddings
@@ -478,7 +512,8 @@ class KglmDisc(Model):
             num_categories = log_probs.shape[-1]
             log_probs = log_probs.view(-1, num_categories)
             target_inds = target_inds.view(-1)
-        target_log_probs = torch.gather(log_probs, -1, target_inds.unsqueeze(-1)).squeeze(-1)
+        target_log_probs = torch.gather(
+            log_probs, -1, target_inds.unsqueeze(-1)).squeeze(-1)
 
         mask = ~target_inds.eq(0)
         target_log_probs[~mask] = 0
@@ -504,7 +539,8 @@ class KglmDisc(Model):
         # Logits are computed using a general bilinear form that measures the similarity between
         # the projected hidden state and the embeddings of candidate entities
         encoded = self._locked_dropout(encoded_head, self._dropout)
-        selection_logits = torch.bmm(encoded, candidate_embeddings.transpose(1, 2))
+        selection_logits = torch.bmm(
+            encoded, candidate_embeddings.transpose(1, 2))
 
         # Get log probabilities using masked softmax (need to double check mask works properly).
 
@@ -531,7 +567,8 @@ class KglmDisc(Model):
         # Since multiplication is addition in log-space, we can apply mask by adding its log (+
         # some small constant for numerical stability).
         mask = is_parent & non_null
-        masked_log_probs = log_probs.unsqueeze(2) + (mask.float() + 1e-45).log()
+        masked_log_probs = log_probs.unsqueeze(
+            2) + (mask.float() + 1e-45).log()
         logger.debug('Masked log probs shape: %s', masked_log_probs.shape)
 
         # Lastly, we need to get rid of the num_candidates dimension. The easy way to do this would
@@ -539,7 +576,8 @@ class KglmDisc(Model):
         # essentially a delta function) this would add a lot of unneccesary terms to the computation graph.
         # To get around this we are going to try to use a gather.
         _, index = torch.max(mask, dim=-1, keepdim=True)
-        target_log_probs = torch.gather(masked_log_probs, dim=-1, index=index).squeeze(-1)
+        target_log_probs = torch.gather(
+            masked_log_probs, dim=-1, index=index).squeeze(-1)
 
         return target_log_probs
 
@@ -549,10 +587,12 @@ class KglmDisc(Model):
                             parent_ids: torch.Tensor) -> torch.Tensor:
 
         # Lookup edges out of parents
-        indices, parent_ids_list, relations_list, tail_ids_list = self._knowledge_graph_lookup(parent_ids)
+        indices, parent_ids_list, relations_list, tail_ids_list = self._knowledge_graph_lookup(
+            parent_ids)
 
         # Embed relations
-        relation_embeddings = [self._relation_embedder(r) for r in relations_list]
+        relation_embeddings = [
+            self._relation_embedder(r) for r in relations_list]
 
         # Logits are computed using a general bilinear form that measures the similarity between
         # the projected hidden state and the embeddings of relations
@@ -561,7 +601,8 @@ class KglmDisc(Model):
         # This is a little funky, but to avoid massive amounts of padding we are going to just
         # iterate over the relation and tail_id vectors one-by-one.
         # shape: (batch_size, sequence_length, num_parents, num_relations)
-        target_log_probs = encoded.new_empty(*parent_ids.shape).fill_(math.log(1e-45))
+        target_log_probs = encoded.new_empty(
+            *parent_ids.shape).fill_(math.log(1e-45))
         for index, parent_id, relation_embedding, tail_id in zip(indices, parent_ids_list, relation_embeddings, tail_ids_list):
             # First we compute the score for each relation w.r.t the current encoding, and convert
             # the scores to log-probabilities
@@ -587,8 +628,10 @@ class KglmDisc(Model):
                                      target_mask: torch.Tensor) -> torch.Tensor:
         # First get the log probabilities of the parents and relations that lead to the current
         # entity.
-        parent_log_probs = self._parent_log_probs(encoded_head, entity_ids, parent_ids)
-        relation_log_probs = self._relation_log_probs(encoded_relation, raw_entity_ids, parent_ids)
+        parent_log_probs = self._parent_log_probs(
+            encoded_head, entity_ids, parent_ids)
+        relation_log_probs = self._relation_log_probs(
+            encoded_relation, raw_entity_ids, parent_ids)
         # Next take their product + marginalize
         combined_log_probs = parent_log_probs + relation_log_probs
         target_log_probs = torch.logsumexp(combined_log_probs, dim=-1)
@@ -597,8 +640,10 @@ class KglmDisc(Model):
         target_log_probs = target_log_probs * mask.float()
         # If validating, measure ppl of the predictions:
         # if not self.training:
-        self._parent_ppl(-torch.logsumexp(parent_log_probs, dim=-1)[mask].sum(), mask.float().sum())
-        self._relation_ppl(-torch.logsumexp(relation_log_probs, dim=-1)[mask].sum(), mask.float().sum())
+        self._parent_ppl(-torch.logsumexp(parent_log_probs,
+                                          dim=-1)[mask].sum(), mask.float().sum())
+        self._relation_ppl(-torch.logsumexp(relation_log_probs,
+                                            dim=-1)[mask].sum(), mask.float().sum())
         # Lastly return the tokenwise average loss
         return -target_log_probs.sum() / (target_mask.sum() + 1e-13)
 
@@ -629,10 +674,12 @@ class KglmDisc(Model):
         # shape: (batch_size, sequence_length, embedding_dim)
         encoded, alpha_loss, beta_loss = self._encode_source(source)
         splits = [self.token_embedding_dim] + [self.entity_embedding_dim] * 2
-        encoded_token, encoded_head, encoded_relation = encoded.split(splits, dim=-1)
+        encoded_token, encoded_head, encoded_relation = encoded.split(
+            splits, dim=-1)
 
         # Predict whether or not the next token will be an entity mention, and if so which type.
-        mention_type_loss = self._mention_type_loss(encoded_token, mention_type, target_mask)
+        mention_type_loss = self._mention_type_loss(
+            encoded_token, mention_type, target_mask)
         self._avg_mention_type_loss(float(mention_type_loss))
 
         # For new mentions, predict which entity (among those in the supplied shortlist) will be
@@ -660,7 +707,8 @@ class KglmDisc(Model):
                                                                         entity_ids,
                                                                         parent_ids,
                                                                         target_mask)
-        self._avg_knowledge_graph_entity_loss(float(knowledge_graph_entity_loss))
+        self._avg_knowledge_graph_entity_loss(
+            float(knowledge_graph_entity_loss))
 
         # Compute total loss
         loss = mention_type_loss + new_entity_loss + knowledge_graph_entity_loss
@@ -690,7 +738,7 @@ class KglmDisc(Model):
         self._state = None
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        out =  {
+        out = {
             'type': self._avg_mention_type_loss.get_metric(reset),
             'new': self._avg_new_entity_loss.get_metric(reset),
             'kg': self._avg_knowledge_graph_entity_loss.get_metric(reset),

@@ -2,20 +2,21 @@ import logging
 import math
 from typing import Any, Dict, List, Optional
 
-from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
-from allennlp.models import Model
-from allennlp.nn import InitializerApplicator
-from allennlp.nn.util import (
-    get_text_field_mask, masked_log_softmax, sequence_cross_entropy_with_logits)
-from allennlp.training.metrics import Average, CategoricalAccuracy, F1Measure, SequenceAccuracy
-from overrides import overrides
 import torch
 import torch.nn.functional as F
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
+from allennlp.models import Model
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
+from allennlp.nn import InitializerApplicator
+from allennlp.nn.util import (get_text_field_mask, masked_log_softmax,
+                              sequence_cross_entropy_with_logits)
+from allennlp.training.metrics import (Average, CategoricalAccuracy, F1Measure,
+                                       SequenceAccuracy)
+from overrides import overrides
 
 from kglm.data import AliasDatabase
-from kglm.modules import (
-    embedded_dropout, LockedDropout, WeightDrop, KnowledgeGraphLookup, RecentEntities)
+from kglm.modules import (KnowledgeGraphLookup, LockedDropout, RecentEntities,
+                          WeightDrop, embedded_dropout)
 from kglm.training.metrics import Ppl
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class NoStory(Model):
     vocab : ``Vocabulary``
         The model vocabulary.
     """
+
     def __init__(self,
                  vocab: Vocabulary,
                  token_embedder: TextFieldEmbedder,
@@ -91,8 +93,10 @@ class NoStory(Model):
                 output_size = token_embedding_dim + entity_embedding_dim
             else:
                 output_size = hidden_size
-            rnns.append(torch.nn.LSTM(input_size, output_size, batch_first=True))
-        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop) for rnn in rnns]
+            rnns.append(torch.nn.LSTM(
+                input_size, output_size, batch_first=True))
+        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop)
+                for rnn in rnns]
         self.rnns = torch.nn.ModuleList(rnns)
 
         # Various linear transformations.
@@ -135,7 +139,7 @@ class NoStory(Model):
         self._avg_mention_type_loss = Average()
         self._avg_new_entity_loss = Average()
         self._avg_vocab_loss = Average()
-        self._new_mention_f1 =  F1Measure(positive_label=1)
+        self._new_mention_f1 = F1Measure(positive_label=1)
         self._new_entity_accuracy = CategoricalAccuracy()
         self._new_entity_accuracy20 = CategoricalAccuracy(top_k=20)
 
@@ -196,7 +200,8 @@ class NoStory(Model):
             embed=self._token_embedder,
             words=source,
             dropout=self._dropoute if self.training else 0)
-        source_embeddings = self._locked_dropout(source_embeddings, self._dropouti)
+        source_embeddings = self._locked_dropout(
+            source_embeddings, self._dropouti)
 
         # Encode.
         current_input = source_embeddings
@@ -274,7 +279,8 @@ class NoStory(Model):
 
             # Take masked softmax to get log probabilties and gather the targets.
             log_probs = masked_log_softmax(logits, shortlist_mask)
-            target_log_probs = torch.gather(log_probs, -1, target_inds.unsqueeze(-1)).squeeze(-1)
+            target_log_probs = torch.gather(
+                log_probs, -1, target_inds.unsqueeze(-1)).squeeze(-1)
 
             # If not generating a new mention, the action is deterministic - so the loss is 0 for these tokens.
             mask = ~target_inds.eq(0)
@@ -296,7 +302,8 @@ class NoStory(Model):
             num_categories = log_probs.shape[-1]
             flat_log_probs = log_probs.view(-1, num_categories)
             flat_target_inds = target_inds.view(-1)
-            target_log_probs = torch.gather(flat_log_probs, -1, flat_target_inds.unsqueeze(-1)).squeeze(-1)
+            target_log_probs = torch.gather(
+                flat_log_probs, -1, flat_target_inds.unsqueeze(-1)).squeeze(-1)
 
             mask = ~flat_target_inds.eq(0)
             target_log_probs[~mask] = 0
@@ -322,7 +329,8 @@ class NoStory(Model):
         # Logits are computed using a general bilinear form that measures the similarity between
         # the projected hidden state and the embeddings of candidate entities
         encoded = self._locked_dropout(encoded_head, self._dropout)
-        selection_logits = torch.bmm(encoded, candidate_embeddings.transpose(1, 2))
+        selection_logits = torch.bmm(
+            encoded, candidate_embeddings.transpose(1, 2))
 
         # Get log probabilities using masked softmax (need to double check mask works properly).
 
@@ -349,7 +357,8 @@ class NoStory(Model):
         # Since multiplication is addition in log-space, we can apply mask by adding its log (+
         # some small constant for numerical stability).
         mask = is_parent & non_null
-        masked_log_probs = log_probs.unsqueeze(2) + (mask.float() + 1e-45).log()
+        masked_log_probs = log_probs.unsqueeze(
+            2) + (mask.float() + 1e-45).log()
         logger.debug('Masked log probs shape: %s', masked_log_probs.shape)
 
         # Lastly, we need to get rid of the num_candidates dimension. The easy way to do this would
@@ -357,7 +366,8 @@ class NoStory(Model):
         # essentially a delta function) this would add a lot of unneccesary terms to the computation graph.
         # To get around this we are going to try to use a gather.
         _, index = torch.max(mask, dim=-1, keepdim=True)
-        target_log_probs = torch.gather(masked_log_probs, dim=-1, index=index).squeeze(-1)
+        target_log_probs = torch.gather(
+            masked_log_probs, dim=-1, index=index).squeeze(-1)
 
         return target_log_probs
 
@@ -395,9 +405,11 @@ class NoStory(Model):
         # This part gets a little funky - we need to make sure that the first dimension in
         # `projected` and `hidden` is batch_size x sequence_length.
         encoded = encoded.view(batch_size * sequence_length, 1, -1)
-        projected = projected.view(batch_size * sequence_length, -1, num_aliases * alias_length)
+        projected = projected.view(
+            batch_size * sequence_length, -1, num_aliases * alias_length)
         copy_scores = torch.bmm(encoded, projected).squeeze()
-        copy_scores = copy_scores.view(batch_size, sequence_length, -1).contiguous()
+        copy_scores = copy_scores.view(
+            batch_size, sequence_length, -1).contiguous()
         logger.debug('Copy scores shape: %s', copy_scores.shape)
 
         return copy_scores
@@ -420,7 +432,8 @@ class NoStory(Model):
         # In order to obtain proper log probabilities we create a mask to omit padding alias tokens
         # from the calculation.
         alias_mask = alias_indices.view(batch_size, sequence_length, -1).gt(0)
-        score_mask = mask.new_ones(batch_size, sequence_length, vocab_size + copy_sequence_length)
+        score_mask = mask.new_ones(
+            batch_size, sequence_length, vocab_size + copy_sequence_length)
         score_mask[:, :, vocab_size:] = alias_mask
 
         # The log-probability distribution is then given by taking the masked log softmax.
@@ -431,7 +444,8 @@ class NoStory(Model):
         # The generated token loss is a simple cross-entropy calculation, we can just gather
         # the log probabilties...
         flattened_log_probs = log_probs.view(batch_size * sequence_length, -1)
-        generate_log_probs_source_vocab = flattened_log_probs.gather(1, flattened_targets)
+        generate_log_probs_source_vocab = flattened_log_probs.gather(
+            1, flattened_targets)
         # ...except we need to ignore the contribution of UNK tokens that are copied (only when
         # computing the loss). To do that we create a mask which is 1 only if the token is not a
         # copied UNK (or padding).
@@ -439,14 +453,16 @@ class NoStory(Model):
         copied = target_alias_indices.gt(0).view(-1, 1)
         generate_mask = ~(unks & copied) & flattened_mask
         # Since we are in log-space we apply the mask by addition.
-        generate_log_probs_extended_vocab = generate_log_probs_source_vocab + (generate_mask.float() + 1e-45).log()
+        generate_log_probs_extended_vocab = generate_log_probs_source_vocab + \
+            (generate_mask.float() + 1e-45).log()
 
         # COPY LOSS ###
         copy_log_probs = flattened_log_probs[:, vocab_size:]
         # When computing the loss we need to get the log probability of **only** the copied tokens.
         alias_indices = alias_indices.view(batch_size * sequence_length, -1)
         target_alias_indices = target_alias_indices.view(-1, 1)
-        copy_mask = alias_indices.eq(target_alias_indices) & flattened_mask & target_alias_indices.gt(0)
+        copy_mask = alias_indices.eq(
+            target_alias_indices) & flattened_mask & target_alias_indices.gt(0)
         copy_log_probs = copy_log_probs + (copy_mask.float() + 1e-45).log()
 
         # COMBINED LOSS ###
@@ -459,12 +475,14 @@ class NoStory(Model):
                                                             dim=1)
         flattened_mask = flattened_mask.squeeze()
         # Zero out padding loss
-        combined_log_probs_extended_vocab = combined_log_probs_extended_vocab * flattened_mask.float()
+        combined_log_probs_extended_vocab = combined_log_probs_extended_vocab * \
+            flattened_mask.float()
         vocab_loss = -combined_log_probs_extended_vocab.sum() / (mask.sum() + 1e-13)
 
         # Unknown penalty - only applies to non-copied unks
         true_unks = unks.squeeze() & ~copied.squeeze() & flattened_mask
-        penalized_log_probs = combined_log_probs_extended_vocab - self._unk_penalty * true_unks.float()
+        penalized_log_probs = combined_log_probs_extended_vocab - \
+            self._unk_penalty * true_unks.float()
         penalized_log_probs[~flattened_mask] = 0
         penalized_vocab_loss = -penalized_log_probs.sum() / (mask.sum() + 1e-13)
 
@@ -478,7 +496,8 @@ class NoStory(Model):
                                                           dim=1)
 
         # For UPP we penalize **only** p(UNK); not the copy probabilities!
-        penalized_log_probs_source_vocab = generate_log_probs_source_vocab - self._unk_penalty * unks.float()
+        penalized_log_probs_source_vocab = generate_log_probs_source_vocab - \
+            self._unk_penalty * unks.float()
         penalized_log_probs_source_vocab = torch.cat((penalized_log_probs_source_vocab,
                                                       copy_log_probs),
                                                      dim=1)
@@ -489,12 +508,16 @@ class NoStory(Model):
         bg_mask = ((1 - mention_mask) * mask.byte()).view(-1)
         mask = (kg_mask | bg_mask)
 
-        self._ppl(-combined_log_probs_source_vocab[mask].sum(), mask.float().sum() + 1e-13)
-        self._upp(-penalized_log_probs_source_vocab[mask].sum(), mask.float().sum() + 1e-13)
+        self._ppl(-combined_log_probs_source_vocab[mask].sum(),
+                  mask.float().sum() + 1e-13)
+        self._upp(-penalized_log_probs_source_vocab[mask].sum(),
+                  mask.float().sum() + 1e-13)
         if kg_mask.any():
-            self._kg_ppl(-combined_log_probs_source_vocab[kg_mask].sum(), kg_mask.float().sum() + 1e-13)
+            self._kg_ppl(-combined_log_probs_source_vocab[kg_mask].sum(
+            ), kg_mask.float().sum() + 1e-13)
         if bg_mask.any():
-            self._bg_ppl(-combined_log_probs_source_vocab[bg_mask].sum(), bg_mask.float().sum() + 1e-13)
+            self._bg_ppl(-combined_log_probs_source_vocab[bg_mask].sum(
+            ), bg_mask.float().sum() + 1e-13)
 
         return vocab_loss, penalized_vocab_loss
 
@@ -528,8 +551,9 @@ class NoStory(Model):
         encoded_token, encoded_head = encoded.split(splits, dim=-1)
 
         # Predict whether or not the next token will be an entity mention, and if so which type.
-        mention_type = mention_type.gt(0).long() #  Map 1, 2 -> 1
-        mention_type_loss = self._mention_type_loss(encoded_token, mention_type, target_mask)
+        mention_type = mention_type.gt(0).long()  # Map 1, 2 -> 1
+        mention_type_loss = self._mention_type_loss(
+            encoded_token, mention_type, target_mask)
         self._avg_mention_type_loss(float(mention_type_loss))
 
         # For new mentions, predict which entity (among those in the supplied shortlist) will be
@@ -566,8 +590,11 @@ class NoStory(Model):
 
         # Compute total loss. Also compute logp (needed for importance sampling evaluation).
         loss = vocab_loss + mention_type_loss + new_entity_loss
-        logp = -(vocab_loss + mention_type_loss + new_entity_loss) * target_mask.sum()
-        penalized_logp = -(penalized_vocab_loss + mention_type_loss + new_entity_loss) * target_mask.sum()
+        logp = -(vocab_loss + mention_type_loss +
+                 new_entity_loss) * target_mask.sum()
+        penalized_logp = - \
+            (penalized_vocab_loss + mention_type_loss +
+             new_entity_loss) * target_mask.sum()
 
         # Activation regularization
         if self._alpha:

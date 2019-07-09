@@ -1,8 +1,8 @@
 from typing import Dict, List, Tuple
 
+import torch
 from allennlp.modules.token_embedders import TokenEmbedder
 from overrides import overrides
-import torch
 
 from kglm.nn.util import nested_enumerate
 
@@ -16,6 +16,7 @@ class RecentEntities:
     cutoff : ``int``
         Number of time steps that an entity is considered 'recent'.
     """
+
     def __init__(self,
                  cutoff: int) -> None:
         self._cutoff = cutoff
@@ -46,7 +47,8 @@ class RecentEntities:
 
         # TODO: See if we can get away without nested loops / cast to CPU.
         candidate_ids = self._get_candidates(entity_ids)
-        candidate_lookup = [{parent_id: j for j, parent_id in enumerate(l)} for l in candidate_ids.tolist()]
+        candidate_lookup = [{parent_id: j for j, parent_id in enumerate(
+            l)} for l in candidate_ids.tolist()]
 
         # Create mask
         candidate_mask = entity_ids.new_zeros(size=(batch_size, sequence_length, candidate_ids.shape[-1]),
@@ -70,14 +72,16 @@ class RecentEntities:
             else:
                 # Fill in mask
                 k = candidate_lookup[i][parent_id]
-                candidate_mask[i, j + 1 : j + self._cutoff + 1, k] = 1
+                candidate_mask[i, j + 1: j + self._cutoff + 1, k] = 1
                 # Track how many sequence elements remain
                 remainder = sequence_length - (j + self._cutoff + 1)
-                self._remaining[i][parent_id] = (j + self._cutoff + 1) - sequence_length
+                self._remaining[i][parent_id] = (
+                    j + self._cutoff + 1) - sequence_length
 
         # Remove any ids for non-recent parents (e.g. those without remaining mask)
         for i, lookup in enumerate(self._remaining):
-            self._remaining[i] = {key: value for key, value in lookup.items() if value > 0}
+            self._remaining[i] = {key: value for key,
+                                  value in lookup.items() if value > 0}
 
         return candidate_ids, candidate_mask
 
@@ -113,7 +117,8 @@ class RecentEntities:
         # Convert the list to a tensor by adding adequete padding.
         batch_size = entity_ids.shape[0]
         max_num_parents = max(unique.shape[0] for unique in all_unique)
-        unique_entity_ids = entity_ids.new_zeros(size=(batch_size, max_num_parents))
+        unique_entity_ids = entity_ids.new_zeros(
+            size=(batch_size, max_num_parents))
         for i, unique in enumerate(all_unique):
             unique_entity_ids[i, :unique.shape[0]] = unique
 
@@ -155,4 +160,3 @@ class RecentEntities:
                     self._remaining[i][values[i].item()] = self._cutoff + 1
             else:
                 self._remaining[i][values[i].item()] = self._cutoff + 1
-

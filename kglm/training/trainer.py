@@ -1,34 +1,36 @@
 
+import datetime
 import logging
 import math
 import os
-import time
 import re
-import datetime
+import time
 import traceback
-from typing import Dict, Optional, List, Tuple, Union, Iterable, Any, NamedTuple
+from typing import (Any, Dict, Iterable, List, NamedTuple, Optional, Tuple,
+                    Union)
 
 import torch
 import torch.optim.lr_scheduler
-
 from allennlp.common import Params
 from allennlp.common.checks import ConfigurationError
-from allennlp.common.util import (dump_metrics, gpu_memory_mb, parse_cuda_device, peak_memory_mb,
-                                  get_frozen_and_tunable_parameter_names, lazy_groups_of)
 from allennlp.common.tqdm import Tqdm
+from allennlp.common.util import (dump_metrics,
+                                  get_frozen_and_tunable_parameter_names,
+                                  gpu_memory_mb, lazy_groups_of,
+                                  parse_cuda_device, peak_memory_mb)
 from allennlp.data.instance import Instance
 from allennlp.data.iterators.data_iterator import DataIterator, TensorDict
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn import util as nn_util
+from allennlp.training import util as training_util
 from allennlp.training.checkpointer import Checkpointer
 from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 from allennlp.training.metric_tracker import MetricTracker
+from allennlp.training.moving_average import MovingAverage
 from allennlp.training.optimizers import Optimizer
 from allennlp.training.tensorboard_writer import TensorboardWriter
 from allennlp.training.trainer_base import TrainerBase
-from allennlp.training import util as training_util
-from allennlp.training.moving_average import MovingAverage
 
 from kglm.training.nt_asgd import NTASGDOptimizer
 
@@ -211,12 +213,12 @@ class LmTrainer(TrainerBase):
         self._batch_num_total = 0
 
         self._tensorboard = TensorboardWriter(
-                get_batch_num_total=lambda: self._batch_num_total,
-                serialization_dir=serialization_dir,
-                summary_interval=summary_interval,
-                histogram_interval=histogram_interval,
-                should_log_parameter_statistics=should_log_parameter_statistics,
-                should_log_learning_rate=should_log_learning_rate)
+            get_batch_num_total=lambda: self._batch_num_total,
+            serialization_dir=serialization_dir,
+            summary_interval=summary_interval,
+            histogram_interval=histogram_interval,
+            should_log_parameter_statistics=should_log_parameter_statistics,
+            should_log_learning_rate=should_log_learning_rate)
 
         self._log_batch_size_period = log_batch_size_period
 
@@ -281,8 +283,8 @@ class LmTrainer(TrainerBase):
         if self._batch_num_total is None:
             self._batch_num_total = 0
 
-        histogram_parameters = set(self.model.get_parameters_for_histogram_tensorboard_logging())
-
+        histogram_parameters = set(
+            self.model.get_parameters_for_histogram_tensorboard_logging())
 
         logger.info("Training")
         train_generator_tqdm = Tqdm.tqdm(raw_train_generator,
@@ -342,9 +344,9 @@ class LmTrainer(TrainerBase):
             if self._moving_average is not None:
                 self._moving_average.apply(batch_num_total)
 
-
             # Update the description with the latest metrics
-            metrics = training_util.get_metrics(self.model, train_loss, batches_this_epoch)
+            metrics = training_util.get_metrics(
+                self.model, train_loss, batches_this_epoch)
             description = training_util.description_from_metrics(metrics)
 
             train_generator_tqdm.set_description(description, refresh=False)
@@ -352,13 +354,17 @@ class LmTrainer(TrainerBase):
             # Log parameter values to Tensorboard
             if self._tensorboard.should_log_this_batch():
                 # self._tensorboard.log_parameter_and_gradient_statistics(self.model, batch_grad_norm)
-                self._tensorboard.log_learning_rates(self.model, self.optimizer)
+                self._tensorboard.log_learning_rates(
+                    self.model, self.optimizer)
 
-                self._tensorboard.add_train_scalar("loss/loss_train", metrics["loss"])
-                self._tensorboard.log_metrics({"epoch_metrics/" + k: v for k, v in metrics.items()})
+                self._tensorboard.add_train_scalar(
+                    "loss/loss_train", metrics["loss"])
+                self._tensorboard.log_metrics(
+                    {"epoch_metrics/" + k: v for k, v in metrics.items()})
 
             if self._tensorboard.should_log_histograms_this_batch():
-                self._tensorboard.log_histograms(self.model, histogram_parameters)
+                self._tensorboard.log_histograms(
+                    self.model, histogram_parameters)
 
             # Save model if needed.
             if self._model_save_interval is not None and (
@@ -366,14 +372,15 @@ class LmTrainer(TrainerBase):
             ):
                 last_save_time = time.time()
                 self._save_checkpoint(
-                        '{0}.{1}'.format(epoch, training_util.time_to_str(int(last_save_time)))
+                    '{0}.{1}'.format(
+                        epoch, training_util.time_to_str(int(last_save_time)))
                 )
-        metrics = training_util.get_metrics(self.model, train_loss, batches_this_epoch, reset=True)
+        metrics = training_util.get_metrics(
+            self.model, train_loss, batches_this_epoch, reset=True)
         metrics['cpu_memory_MB'] = peak_cpu_usage
         for (gpu_num, memory) in gpu_usage:
             metrics['gpu_'+str(gpu_num)+'_memory_MB'] = memory
         return metrics
-
 
     def _validation_loss(self) -> Tuple[float, int]:
         """
@@ -414,7 +421,8 @@ class LmTrainer(TrainerBase):
                 val_loss += loss.detach().cpu().numpy()
 
             # Update the description with the latest metrics
-            val_metrics = training_util.get_metrics(self.model, val_loss, batches_this_epoch)
+            val_metrics = training_util.get_metrics(
+                self.model, val_loss, batches_this_epoch)
             description = training_util.description_from_metrics(val_metrics)
             val_generator_tqdm.set_description(description, refresh=False)
 
@@ -461,7 +469,8 @@ class LmTrainer(TrainerBase):
                                                     train_metrics['cpu_memory_MB'])
             for key, value in train_metrics.items():
                 if key.startswith('gpu_'):
-                    metrics["peak_"+key] = max(metrics.get("peak_"+key, 0), value)
+                    metrics["peak_" +
+                            key] = max(metrics.get("peak_"+key, 0), value)
 
             # If we are using an NT-ASGD optimizer, we replace the model parameters with "average"
             # parameters when evaluating / checkpointing.
@@ -479,7 +488,8 @@ class LmTrainer(TrainerBase):
                 with torch.no_grad():
                     # We have a validation set, so compute all the metrics on it.
                     val_loss, num_batches = self._validation_loss()
-                    val_metrics = training_util.get_metrics(self.model, val_loss, num_batches, reset=True)
+                    val_metrics = training_util.get_metrics(
+                        self.model, val_loss, num_batches, reset=True)
 
                     # Check validation metric for early stopping
                     this_epoch_val_metric = val_metrics[self._validation_metric]
@@ -489,11 +499,13 @@ class LmTrainer(TrainerBase):
                         logger.info("Ran out of patience.  Stopping training.")
                         break
 
-            self._tensorboard.log_metrics(train_metrics, val_metrics=val_metrics, log_to_console=True)
+            self._tensorboard.log_metrics(
+                train_metrics, val_metrics=val_metrics, log_to_console=True)
 
             # Create overall metrics dict
             training_elapsed_time = time.time() - training_start_time
-            metrics["training_duration"] = time.strftime("%H:%M:%S", time.gmtime(training_elapsed_time))
+            metrics["training_duration"] = time.strftime(
+                "%H:%M:%S", time.gmtime(training_elapsed_time))
             metrics["training_start_epoch"] = epoch_counter
             metrics["training_epochs"] = epochs_trained
             metrics["epoch"] = epoch
@@ -513,24 +525,30 @@ class LmTrainer(TrainerBase):
                 self._metric_tracker.best_epoch_metrics = val_metrics
 
             if self._serialization_dir:
-                dump_metrics(os.path.join(self._serialization_dir, f'metrics_epoch_{epoch}.json'), metrics)
+                dump_metrics(os.path.join(self._serialization_dir,
+                                          f'metrics_epoch_{epoch}.json'), metrics)
 
             if self._learning_rate_scheduler:
                 # The LRScheduler API is agnostic to whether your schedule requires a validation metric -
                 # if it doesn't, the validation metric passed here is ignored.
-                self._learning_rate_scheduler.step(this_epoch_val_metric, epoch)
+                self._learning_rate_scheduler.step(
+                    this_epoch_val_metric, epoch)
 
             self._save_checkpoint(epoch)
 
             epoch_elapsed_time = time.time() - epoch_start_time
-            logger.info("Epoch duration: %s", time.strftime("%H:%M:%S", time.gmtime(epoch_elapsed_time)))
+            logger.info("Epoch duration: %s", time.strftime(
+                "%H:%M:%S", time.gmtime(epoch_elapsed_time)))
 
             if epoch < self._num_epochs - 1:
                 training_elapsed_time = time.time() - training_start_time
                 estimated_time_remaining = training_elapsed_time * \
-                    ((self._num_epochs - epoch_counter) / float(epoch - epoch_counter + 1) - 1)
-                formatted_time = str(datetime.timedelta(seconds=int(estimated_time_remaining)))
-                logger.info("Estimated training time remaining: %s", formatted_time)
+                    ((self._num_epochs - epoch_counter) /
+                     float(epoch - epoch_counter + 1) - 1)
+                formatted_time = str(datetime.timedelta(
+                    seconds=int(estimated_time_remaining)))
+                logger.info(
+                    "Estimated training time remaining: %s", formatted_time)
 
             # Revert parameters back to original if using ASGD
             if isinstance(self.optimizer, NTASGDOptimizer):
@@ -568,22 +586,22 @@ class LmTrainer(TrainerBase):
 
         # These are the training states we need to persist.
         training_states = {
-                "metric_tracker": self._metric_tracker.state_dict(),
-                "optimizer": self.optimizer.state_dict(),
-                "batch_num_total": self._batch_num_total
+            "metric_tracker": self._metric_tracker.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "batch_num_total": self._batch_num_total
         }
 
         # If we have a learning rate scheduler, we should persist that too.
         if self._learning_rate_scheduler is not None:
             training_states["learning_rate_scheduler"] = (
-                    self._learning_rate_scheduler.state_dict()
+                self._learning_rate_scheduler.state_dict()
             )
 
         self._checkpointer.save_checkpoint(
-                model_state=self.model.state_dict(),
-                epoch=epoch,
-                training_states=training_states,
-                is_best_so_far=self._metric_tracker.is_best_so_far())
+            model_state=self.model.state_dict(),
+            epoch=epoch,
+            training_states=training_states,
+            is_best_so_far=self._metric_tracker.is_best_so_far())
 
         # # Restore the original values for parameters so that training will not be affected.
         if self._moving_average is not None:
@@ -616,16 +634,19 @@ class LmTrainer(TrainerBase):
         self.model.load_state_dict(model_state)
         self.optimizer.load_state_dict(training_state["optimizer"])
         if self._learning_rate_scheduler is not None and "learning_rate_scheduler" in training_state:
-            self._learning_rate_scheduler.load_state_dict(training_state["learning_rate_scheduler"])
+            self._learning_rate_scheduler.load_state_dict(
+                training_state["learning_rate_scheduler"])
         training_util.move_optimizer_to_cuda(self.optimizer)
 
         # Currently the ``training_state`` contains a serialized ``MetricTracker``.
         if "metric_tracker" in training_state:
-            self._metric_tracker.load_state_dict(training_state["metric_tracker"])
+            self._metric_tracker.load_state_dict(
+                training_state["metric_tracker"])
         # It used to be the case that we tracked ``val_metric_per_epoch``.
         elif "val_metric_per_epoch" in training_state:
             self._metric_tracker.clear()
-            self._metric_tracker.add_metrics(training_state["val_metric_per_epoch"])
+            self._metric_tracker.add_metrics(
+                training_state["val_metric_per_epoch"])
         # And before that we didn't track anything.
         else:
             self._metric_tracker.clear()
@@ -677,26 +698,32 @@ class LmTrainer(TrainerBase):
             # the right device.
             model = model.cuda(model_device)
 
-        parameters = [[n, p] for n, p in model.named_parameters() if p.requires_grad]
+        parameters = [[n, p]
+                      for n, p in model.named_parameters() if p.requires_grad]
         optimizer = Optimizer.from_params(parameters, params.pop("optimizer"))
         if "moving_average" in params:
-            moving_average = MovingAverage.from_params(params.pop("moving_average"), parameters=parameters)
+            moving_average = MovingAverage.from_params(
+                params.pop("moving_average"), parameters=parameters)
         else:
             moving_average = None
 
         if lr_scheduler_params:
-            scheduler = LearningRateScheduler.from_params(optimizer, lr_scheduler_params)
+            scheduler = LearningRateScheduler.from_params(
+                optimizer, lr_scheduler_params)
         else:
             scheduler = None
 
-        num_serialized_models_to_keep = params.pop_int("num_serialized_models_to_keep", 20)
+        num_serialized_models_to_keep = params.pop_int(
+            "num_serialized_models_to_keep", 20)
         keep_serialized_model_every_num_seconds = params.pop_int(
-                "keep_serialized_model_every_num_seconds", None)
+            "keep_serialized_model_every_num_seconds", None)
         model_save_interval = params.pop_float("model_save_interval", None)
         summary_interval = params.pop_int("summary_interval", 100)
         histogram_interval = params.pop_int("histogram_interval", None)
-        should_log_parameter_statistics = params.pop_bool("should_log_parameter_statistics", True)
-        should_log_learning_rate = params.pop_bool("should_log_learning_rate", False)
+        should_log_parameter_statistics = params.pop_bool(
+            "should_log_parameter_statistics", True)
+        should_log_learning_rate = params.pop_bool(
+            "should_log_learning_rate", False)
         log_batch_size_period = params.pop_int("log_batch_size_period", None)
 
         params.assert_empty(cls.__name__)
@@ -743,24 +770,27 @@ class TrainerPieces(NamedTuple):
     @staticmethod
     def from_params(params: Params, serialization_dir: str, recover: bool = False) -> 'TrainerPieces':
         all_datasets = training_util.datasets_from_params(params)
-        datasets_for_vocab_creation = set(params.pop("datasets_for_vocab_creation", all_datasets))
+        datasets_for_vocab_creation = set(params.pop(
+            "datasets_for_vocab_creation", all_datasets))
 
         for dataset in datasets_for_vocab_creation:
             if dataset not in all_datasets:
-                raise ConfigurationError(f"invalid 'dataset_for_vocab_creation' {dataset}")
+                raise ConfigurationError(
+                    f"invalid 'dataset_for_vocab_creation' {dataset}")
 
         logger.info("From dataset instances, %s will be considered for vocabulary creation.",
                     ", ".join(datasets_for_vocab_creation))
 
         if recover and os.path.exists(os.path.join(serialization_dir, "vocabulary")):
-            vocab = Vocabulary.from_files(os.path.join(serialization_dir, "vocabulary"))
+            vocab = Vocabulary.from_files(
+                os.path.join(serialization_dir, "vocabulary"))
             params.pop("vocabulary", {})
         else:
             vocab = Vocabulary.from_params(
-                    params.pop("vocabulary", {}),
-                    (instance for key, dataset in all_datasets.items()
-                     for instance in dataset
-                     if key in datasets_for_vocab_creation)
+                params.pop("vocabulary", {}),
+                (instance for key, dataset in all_datasets.items()
+                 for instance in dataset
+                 if key in datasets_for_vocab_creation)
             )
 
         model = Model.from_params(vocab=vocab, params=params.pop('model'))
@@ -772,7 +802,8 @@ class TrainerPieces(NamedTuple):
         iterator.index_with(model.vocab)
         validation_iterator_params = params.pop("validation_iterator", None)
         if validation_iterator_params:
-            validation_iterator = DataIterator.from_params(validation_iterator_params)
+            validation_iterator = DataIterator.from_params(
+                validation_iterator_params)
             validation_iterator.index_with(model.vocab)
         else:
             validation_iterator = None
@@ -788,7 +819,7 @@ class TrainerPieces(NamedTuple):
                 parameter.requires_grad_(False)
 
         frozen_parameter_names, tunable_parameter_names = \
-                    get_frozen_and_tunable_parameter_names(model)
+            get_frozen_and_tunable_parameter_names(model)
         logger.info("Following parameters are Frozen  (without gradient):")
         for name in frozen_parameter_names:
             logger.info(name)
@@ -799,4 +830,3 @@ class TrainerPieces(NamedTuple):
         return TrainerPieces(model, iterator,
                              train_data, validation_data, test_data,
                              validation_iterator, trainer_params)
-

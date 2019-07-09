@@ -2,9 +2,9 @@ import logging
 import pickle
 from typing import List, Tuple
 
+import torch
 from allennlp.data.vocabulary import Vocabulary
 from tqdm import tqdm
-import torch
 
 from kglm.nn.util import nested_enumerate
 
@@ -24,7 +24,8 @@ class KnowledgeGraphLookup:
         with open(knowledge_graph_path, 'rb') as f:
             knowledge_graph = pickle.load(f)
 
-        entity_idx_to_token = self._vocab.get_index_to_token_vocabulary('entity_ids')
+        entity_idx_to_token = self._vocab.get_index_to_token_vocabulary(
+            'entity_ids')
         all_relations: List[torch.Tensor] = []
         all_tail_ids: List[torch.Tensor] = []
         for i in tqdm(range(len(entity_idx_to_token))):
@@ -40,10 +41,13 @@ class KnowledgeGraphLookup:
                     tail_ids = None
                 else:
                     # Get the relation and tail id tokens
-                    relation_tokens, tail_id_tokens = zip(*knowledge_graph[entity_id])
+                    relation_tokens, tail_id_tokens = zip(
+                        *knowledge_graph[entity_id])
                     # Index tokens
-                    relations = [self._vocab.get_token_index(t, 'relations') for t in relation_tokens]
-                    tail_ids = [self._vocab.get_token_index(t, 'raw_entity_ids') for t in tail_id_tokens]
+                    relations = [self._vocab.get_token_index(
+                        t, 'relations') for t in relation_tokens]
+                    tail_ids = [self._vocab.get_token_index(
+                        t, 'raw_entity_ids') for t in tail_id_tokens]
                     # Convert to tensors
                     relations = torch.LongTensor(relations)
                     tail_ids = torch.LongTensor(tail_ids)
@@ -93,4 +97,3 @@ class KnowledgeGraphLookup:
             tail_ids_list.append(tail_ids.to(device=parent_ids.device))
 
         return indices, parent_ids_list, relations_list, tail_ids_list
-

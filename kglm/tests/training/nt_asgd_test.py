@@ -1,5 +1,5 @@
-from allennlp.common.testing import AllenNlpTestCase
 import torch
+from allennlp.common.testing import AllenNlpTestCase
 
 from kglm.training.nt_asgd import NTASGDOptimizer, NTASGDScheduler
 

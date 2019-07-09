@@ -1,10 +1,10 @@
+import numpy as np
 from allennlp.common.testing import AllenNlpTestCase
 from allennlp.data import Instance, Token
 from allennlp.data.dataset import Batch
 from allennlp.data.fields import TextField
 from allennlp.data.token_indexers import SingleIdTokenIndexer
 from allennlp.data.vocabulary import Vocabulary
-import numpy as np
 
 from kglm.data import AliasDatabase
 
@@ -14,22 +14,22 @@ class AliasDatabaseTest(AllenNlpTestCase):
 
     def setUp(self):
         self.token_lookup = {
-                'Entity1': [['Robert', 'Logan'], ['Robby']],
-                'Entity2': [['Jimmy']]
+            'Entity1': [['Robert', 'Logan'], ['Robby']],
+            'Entity2': [['Jimmy']]
         }
         self.id_map_lookup = {
-                'Entity1': {'Robert': 1, 'Logan': 2, 'Robby': 3},
-                'Entity2': {'Jimmy': 1}
+            'Entity1': {'Robert': 1, 'Logan': 2, 'Robby': 3},
+            'Entity2': {'Jimmy': 1}
         }
         self.id_array_lookup = {
-                'Entity1': np.array([[1, 2], [3, 0]], dtype=int),
-                'Entity2': np.array([[1]], dtype=int)
+            'Entity1': np.array([[1, 2], [3, 0]], dtype=int),
+            'Entity2': np.array([[1]], dtype=int)
         }
         self.token_to_entity_lookup = {
-                'Robert': {'Entity1'},
-                'Logan': {'Entity1'},
-                'Robby': {'Entity1'},
-                'Jimmy': {'Entity2'}
+            'Robert': {'Entity1'},
+            'Logan': {'Entity1'},
+            'Robby': {'Entity1'},
+            'Jimmy': {'Entity2'}
         }
         token_indexer = SingleIdTokenIndexer()
         entity_indexer = SingleIdTokenIndexer(namespace='entity_ids')
@@ -38,8 +38,8 @@ class AliasDatabaseTest(AllenNlpTestCase):
         entity_field = TextField([Token(t) for t in ['Entity1', '', '', '', '', 'Entity1']],
                                  {'entity_ids': entity_indexer})
         self.instance = Instance({
-                'tokens': text_field,
-                'entity_identifiers': entity_field
+            'tokens': text_field,
+            'entity_identifiers': entity_field
         })
         self.dataset = Batch([self.instance])
         self.vocab = Vocabulary.from_instances(self.dataset)
@@ -48,13 +48,14 @@ class AliasDatabaseTest(AllenNlpTestCase):
 
     def test_load(self):
         # Test that the load function has the expected behavior
-        alias_database = AliasDatabase.load('kglm/tests/fixtures/enhanced-wikitext-test/alias.pkl')
+        alias_database = AliasDatabase.load(
+            'kglm/tests/fixtures/enhanced-wikitext-test/alias.pkl')
         test_entity = 'Q156216'  # Benton County
 
         # Check that aliases are tokenized properly
         expected_tokenized_aliases = [
-                ['Benton', 'County'],
-                ['Benton', 'County', ',', 'Washington']
+            ['Benton', 'County'],
+            ['Benton', 'County', ',', 'Washington']
         ]
         assert alias_database._token_lookup[test_entity] == expected_tokenized_aliases
 
@@ -104,14 +105,16 @@ class AliasDatabaseTest(AllenNlpTestCase):
         assert entity_id_tensor.shape == (1, 6, 1)
 
         # Check that the global ids match the vocabulary indices
-        assert global_tensor[0, 0, 0, 0] == self.vocab.get_token_index('Robert', namespace='tokens')
+        assert global_tensor[0, 0, 0, 0] == self.vocab.get_token_index(
+            'Robert', namespace='tokens')
         assert global_tensor[0, 1, 0, 0] == 0  # Padding since not an alias
 
         assert local_tensor[0, 0, 0, 0] == 1
         assert local_tensor[0, 1, 0, 0] == 0  # Padding since not an alias
 
-        match_token_idx = self.vocab.get_token_index('Entity1', namespace='entity_ids')
-        nonmatch_token_idx = self.vocab.get_token_index('Entity2', namespace='entity_ids')
+        match_token_idx = self.vocab.get_token_index(
+            'Entity1', namespace='entity_ids')
+        nonmatch_token_idx = self.vocab.get_token_index(
+            'Entity2', namespace='entity_ids')
         assert entity_id_tensor[0, 0, match_token_idx] == 1
         assert entity_id_tensor[0, 0, nonmathc_token_idx] == 0
-

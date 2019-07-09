@@ -2,18 +2,18 @@ import logging
 import math
 from typing import Any, Dict, List, Optional
 
-from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
-from allennlp.models import Model
-from allennlp.nn import InitializerApplicator
-from allennlp.nn.util import get_text_field_mask, masked_log_softmax, \
-    sequence_cross_entropy_with_logits
-from overrides import overrides
 import torch
 import torch.nn.functional as F
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
+from allennlp.models import Model
+from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder
+from allennlp.nn import InitializerApplicator
+from allennlp.nn.util import (get_text_field_mask, masked_log_softmax,
+                              sequence_cross_entropy_with_logits)
+from overrides import overrides
 
 from kglm.data import AliasDatabase
-from kglm.modules import embedded_dropout, LockedDropout, WeightDrop
+from kglm.modules import LockedDropout, WeightDrop, embedded_dropout
 from kglm.training.metrics import Ppl
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class AliasCopynet(Model):
     embedding_dim : ``int``
         The dimension of entity / length embeddings. Should match the encoder output size.
     """
+
     def __init__(self,
                  vocab: Vocabulary,
                  token_embedder: TextFieldEmbedder,
@@ -91,8 +92,10 @@ class AliasCopynet(Model):
                 output_size = token_embedding_dim
             else:
                 output_size = hidden_size
-            rnns.append(torch.nn.LSTM(input_size, output_size, batch_first=True))
-        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop) for rnn in rnns]
+            rnns.append(torch.nn.LSTM(
+                input_size, output_size, batch_first=True))
+        rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop)
+                for rnn in rnns]
         self.rnns = torch.nn.ModuleList(rnns)
 
         # Various linear transformations.
@@ -119,7 +122,7 @@ class AliasCopynet(Model):
         if tie_weights:
             self._fc_generate.weight = self._token_embedder.weight
 
-        self._state: Optional[Dict[str, Any]]= None
+        self._state: Optional[Dict[str, Any]] = None
 
         # Metrics
         # self._avg_mention_loss = Average()
@@ -239,9 +242,11 @@ class AliasCopynet(Model):
         # This part gets a little funky - we need to make sure that the first dimension in
         # `projected` and `hidden` is batch_size x sequence_length.
         encoded = encoded.view(batch_size * sequence_length, 1, -1)
-        projected = projected.view(batch_size * sequence_length, -1, num_aliases * alias_length)
+        projected = projected.view(
+            batch_size * sequence_length, -1, num_aliases * alias_length)
         copy_scores = torch.bmm(encoded, projected).squeeze()
-        copy_scores = copy_scores.view(batch_size, sequence_length, -1).contiguous()
+        copy_scores = copy_scores.view(
+            batch_size, sequence_length, -1).contiguous()
 
         return copy_scores
 
@@ -264,7 +269,8 @@ class AliasCopynet(Model):
         # In order to obtain proper log probabilities we create a mask to omit padding alias tokens
         # from the calculation.
         alias_mask = alias_indices.view(batch_size, sequence_length, -1).gt(0)
-        score_mask = mask.new_ones(batch_size, sequence_length, vocab_size + copy_sequence_length)
+        score_mask = mask.new_ones(
+            batch_size, sequence_length, vocab_size + copy_sequence_length)
         score_mask[:, :, vocab_size:] = alias_mask
 
         # The log-probability distribution is then given by taking the masked log softmax.
@@ -275,7 +281,8 @@ class AliasCopynet(Model):
         # The generated token loss is a simple cross-entropy calculation, we can just gather
         # the log probabilties...
         flattened_log_probs = log_probs.view(batch_size * sequence_length, -1)
-        generate_log_probs_source_vocab = flattened_log_probs.gather(1, flattened_targets)
+        generate_log_probs_source_vocab = flattened_log_probs.gather(
+            1, flattened_targets)
         # ...except we need to ignore the contribution of UNK tokens that are copied (only when
         # computing the loss). To do that we create a mask which is 1 only if the token is not a
         # copied UNK (or padding).
@@ -283,14 +290,16 @@ class AliasCopynet(Model):
         copied = target_alias_indices.gt(0).view(-1, 1)
         generate_mask = ~(unks & copied) & flattened_mask
         # Since we are in log-space we apply the mask by addition.
-        generate_log_probs_extended_vocab = generate_log_probs_source_vocab + (generate_mask.float() + 1e-45).log()
+        generate_log_probs_extended_vocab = generate_log_probs_source_vocab + \
+            (generate_mask.float() + 1e-45).log()
 
         # COPY LOSS ###
         copy_log_probs = flattened_log_probs[:, vocab_size:]
         # When computing the loss we need to get the log probability of **only** the copied tokens.
         alias_indices = alias_indices.view(batch_size * sequence_length, -1)
         target_alias_indices = target_alias_indices.view(-1, 1)
-        copy_mask = alias_indices.eq(target_alias_indices) & flattened_mask & target_alias_indices.gt(0)
+        copy_mask = alias_indices.eq(
+            target_alias_indices) & flattened_mask & target_alias_indices.gt(0)
         copy_log_probs = copy_log_probs + (copy_mask.float() + 1e-45).log()
 
         # COMBINED LOSS ###
@@ -313,7 +322,8 @@ class AliasCopynet(Model):
                                                           dim=1)
 
         # For UPP we penalize **only** p(UNK); not the copy probabilities!
-        penalized_log_probs_source_vocab = generate_log_probs_source_vocab - self._unk_penalty * unks.float()
+        penalized_log_probs_source_vocab = generate_log_probs_source_vocab - \
+            self._unk_penalty * unks.float()
         penalized_log_probs_source_vocab = torch.cat((penalized_log_probs_source_vocab,
                                                       copy_log_probs),
                                                      dim=1)
@@ -324,12 +334,16 @@ class AliasCopynet(Model):
         bg_mask = ((1 - mention_mask) * mask.byte()).view(-1)
         mask = (kg_mask | bg_mask)
 
-        self._ppl(-combined_log_probs_source_vocab[mask].sum(), mask.float().sum() + 1e-13)
-        self._upp(-penalized_log_probs_source_vocab[mask].sum(), mask.float().sum() + 1e-13)
+        self._ppl(-combined_log_probs_source_vocab[mask].sum(),
+                  mask.float().sum() + 1e-13)
+        self._upp(-penalized_log_probs_source_vocab[mask].sum(),
+                  mask.float().sum() + 1e-13)
         if kg_mask.any():
-            self._kg_ppl(-combined_log_probs_source_vocab[kg_mask].sum(), kg_mask.float().sum() + 1e-13)
+            self._kg_ppl(-combined_log_probs_source_vocab[kg_mask].sum(
+            ), kg_mask.float().sum() + 1e-13)
         if bg_mask.any():
-            self._bg_ppl(-combined_log_probs_source_vocab[bg_mask].sum(), bg_mask.float().sum() + 1e-13)
+            self._bg_ppl(-combined_log_probs_source_vocab[bg_mask].sum(
+            ), bg_mask.float().sum() + 1e-13)
 
         return vocab_loss
 
@@ -352,7 +366,8 @@ class AliasCopynet(Model):
             embed=self._token_embedder,
             words=source,
             dropout=self._dropoute if self.training else 0)
-        source_embeddings = self._locked_dropout(source_embeddings, self._dropouti)
+        source_embeddings = self._locked_dropout(
+            source_embeddings, self._dropouti)
 
         # Embed entities.
         entity_ids = entity_ids['entity_ids']
@@ -427,14 +442,15 @@ class AliasCopynet(Model):
                                       entity_ids.gt(0))
 
         # Compute total loss
-        loss = vocab_loss # + mention_loss + entity_loss
+        loss = vocab_loss  # + mention_loss + entity_loss
 
         # Activation regularization
         if self._alpha:
             loss = loss + self._alpha * dropped_output.pow(2).mean()
         # Temporal activation regularization (slowness)
         if self._beta:
-            loss = loss + self._beta * (output[:, 1:] - output[:, :-1]).pow(2).mean()
+            loss = loss + self._beta * \
+                (output[:, 1:] - output[:, :-1]).pow(2).mean()
 
         return {'loss': loss}
 
@@ -460,4 +476,3 @@ class AliasCopynet(Model):
             'kg_ppl': self._kg_ppl.get_metric(reset),
             'bg_ppl': self._bg_ppl.get_metric(reset)
         }
-
