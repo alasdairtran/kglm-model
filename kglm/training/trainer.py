@@ -12,12 +12,12 @@ from typing import (Any, Dict, Iterable, List, NamedTuple, Optional, Tuple,
 import torch
 import torch.optim.lr_scheduler
 from allennlp.common import Params
-from allennlp.common.checks import ConfigurationError
+from allennlp.common.checks import ConfigurationError, parse_cuda_device
 from allennlp.common.tqdm import Tqdm
 from allennlp.common.util import (dump_metrics,
                                   get_frozen_and_tunable_parameter_names,
                                   gpu_memory_mb, lazy_groups_of,
-                                  parse_cuda_device, peak_memory_mb)
+                                  peak_memory_mb)
 from allennlp.data.instance import Instance
 from allennlp.data.iterators.data_iterator import DataIterator, TensorDict
 from allennlp.data.vocabulary import Vocabulary
