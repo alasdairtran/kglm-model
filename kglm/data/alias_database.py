@@ -59,6 +59,11 @@ class AliasDatabase:
         with open(path, 'rb') as f:
             alias_lookup = pickle.load(f)
 
+        import ptvsd
+        address = ('0.0.0.0', 5678)
+        ptvsd.enable_attach(address, redirect_output=True)
+        ptvsd.wait_for_attach()
+
         for entity, aliases in Tqdm.tqdm(alias_lookup.items()):
             # Reverse token to potential entity lookup
             for alias in aliases:
