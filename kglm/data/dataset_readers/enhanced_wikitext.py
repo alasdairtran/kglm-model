@@ -248,7 +248,7 @@ class EnhancedWikitextKglmReader(DatasetReader):
                         new_entity = relation == ['@@NEW@@']
 
                         # If neccessary, update the shortlist. Obtain the index of the entity identifier in
-                        # the shortlist.
+                        # the shortlist. reverse_shortlist maps each entity ID to the order it's first seen.
                         if entity_id not in reverse_shortlist:
                             reverse_shortlist[entity_id] = len(
                                 reverse_shortlist)

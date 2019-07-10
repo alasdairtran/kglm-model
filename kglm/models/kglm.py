@@ -425,6 +425,38 @@ class Kglm(Model):
                 alias_copy_inds: torch.Tensor = None,
                 **kwargs) -> Dict[str, torch.Tensor]:
 
+        # source: the entire article. Sentences are separated by @@END@@. The
+        # first token is @@START@@. There is no end token.
+
+        # target: same as source but shifted one token to the right. Thus the
+        # last token is @@END@@ and there is no start token.
+
+        # metadata contains three fields:
+        #   "source_tokens" contains the raw source
+        #   "alias_database" is the entire alias database object
+        #   "target_tokens" contains the raw target
+
+        # The following four parameters have the same shape as source with
+        # padding token where there is no info. parent_ids and entity_ids
+        # share the same vocab.
+        #   raw_entity_ids
+        #   entity_ids
+        #   parent_ids
+        #   relations
+
+        # mention_type: 0 for padding, 1 for new entity, 2 for existing entity
+        # shortlist_inds: 0 for padding, 1 for first entity, 2 for second new entity
+
+        # shortlist is a list of entity ids (thin of entity_ids but no padding
+        # and no repetition)
+
+        # alias_copy_inds: not sure
+
+        import ptvsd
+        address = ('0.0.0.0', 5678)
+        ptvsd.enable_attach(address, redirect_output=True)
+        ptvsd.wait_for_attach()
+
         # Tensorize the alias_database - this will only perform the operation once.
         alias_database = metadata[0]['alias_database']
         alias_database.tensorize(vocab=self.vocab)

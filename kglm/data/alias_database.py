@@ -59,11 +59,6 @@ class AliasDatabase:
         with open(path, 'rb') as f:
             alias_lookup = pickle.load(f)
 
-        import ptvsd
-        address = ('0.0.0.0', 5678)
-        ptvsd.enable_attach(address, redirect_output=True)
-        ptvsd.wait_for_attach()
-
         for entity, aliases in Tqdm.tqdm(alias_lookup.items()):
             # Reverse token to potential entity lookup
             for alias in aliases:
@@ -94,6 +89,11 @@ class AliasDatabase:
                     id_array[i, j] = id_map[token]
             id_array_lookup[entity] = id_array
 
+        # Examples:
+        # token_lookup: {'Q31': [['Belgium', ['Kingdom', 'of', 'Belgium']]]}
+        # id_map_lookup: {'Q31': {'Belgium': 1, 'Kingdom': 2}}
+        # id_array_lookup: {'Q31': np.array of ids} of shape [n_aliases, max_alias_len]
+        # token_to_entity_lookup: {'Belgium': {'Q31'}}
         return cls(token_lookup=token_lookup,
                    id_map_lookup=id_map_lookup,
                    id_array_lookup=id_array_lookup,
